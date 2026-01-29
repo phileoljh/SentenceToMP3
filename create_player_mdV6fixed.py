@@ -174,7 +174,10 @@ def generate_html():
         const playlistData = {js_playlist};
 
         let currentIndex = 0;
-        let waitTimer = null; 
+        let gapTimer = null;
+        let gapRemaining = 0;
+        let gapStartTime = 0;
+        let isGapPaused = false;
 
         const audio = document.getElementById('audioPlayer');
         const displayWord = document.getElementById('current-word');
@@ -208,9 +211,15 @@ def generate_html():
                 playlistUi.appendChild(li);
             }});
         }}
+        
+        function clearGapState() {{
+            if (gapTimer) {{ clearTimeout(gapTimer); gapTimer = null; }}
+            isGapPaused = false;
+            gapRemaining = 0;
+        }}
 
         function loadTrack(index) {{
-            if (waitTimer) {{ clearTimeout(waitTimer); waitTimer = null; }}
+            clearGapState();
             if (index < 0 || index >= playlistData.length) return;
             
             currentIndex = index;
@@ -243,10 +252,49 @@ def generate_html():
         }}
 
         function togglePlay() {{
-            audio.paused ? audio.play() : audio.pause();
+            if (gapTimer) {{
+                pauseGap();
+            }} else if (isGapPaused) {{
+                resumeGap();
+            }} else {{
+                audio.paused ? audio.play() : audio.pause();
+            }}
         }}
-        audio.onplay = () => playPauseBtn.innerText = "⏸ 暫停";
-        audio.onpause = () => playPauseBtn.innerText = "▶ 播放";
+
+        audio.onplay = () => {{
+            clearGapState();
+            playPauseBtn.innerText = "⏸ 暫停";
+        }};
+        audio.onpause = () => {{
+            if (!isGapPaused) playPauseBtn.innerText = "▶ 播放";
+        }};
+        
+        function startGap(seconds) {{
+            clearGapState(); 
+            gapRemaining = seconds * 1000;
+            resumeGap();
+        }}
+        
+        function resumeGap() {{
+            isGapPaused = false;
+            gapStartTime = Date.now();
+            playPauseBtn.innerText = "⏸ 休息中";
+            
+            gapTimer = setTimeout(() => {{
+                clearGapState();
+                playNext();
+            }}, gapRemaining);
+        }}
+        
+        function pauseGap() {{
+            if (!gapTimer) return;
+            isGapPaused = true;
+            clearTimeout(gapTimer);
+            gapTimer = null;
+            const elapsed = Date.now() - gapStartTime;
+            gapRemaining -= elapsed;
+            playPauseBtn.innerText = "▶ 繼續";
+        }}
 
         function jumpToTrack() {{
             const val = parseInt(jumpInput.value);
@@ -265,7 +313,7 @@ def generate_html():
         }});
 
         function playNext(force = false) {{
-            if (force && waitTimer) clearTimeout(waitTimer);
+            if (force) clearGapState();
 
             if (currentIndex < playlistData.length - 1) {{
                 loadTrack(currentIndex + 1);
@@ -286,7 +334,7 @@ def generate_html():
             if (delayVal <= 0) {{
                 playNext();
             }} else {{
-                waitTimer = setTimeout(() => playNext(), delayVal * 1000);
+                startGap(delayVal);
             }}
         }});
 
