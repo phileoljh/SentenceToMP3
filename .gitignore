@@ -1,0 +1,23 @@
+# Ignore Data Directories
+To+Ving/
+V-ing/
+google翻譯V4/
+字典整理句子mp3/
+
+# Ignore Outputs
+MP3_Output/
+*.mp3
+*.html
+# Exception: Keep the template or script if any HTML is source code (but here they are generated)
+
+# Ignore Data Input Files
+mp3.md
+GITHUB_SETUP.md
+
+# Python
+__pycache__/
+*.pyc
+
+# System
+.DS_Store
+Thumbs.db
