@@ -133,7 +133,7 @@ def generate_html():
 <body>
 
     <div class="player-header">
-        <h2>🎧 單字聽力訓練 V6 (Fixed)</h2>
+        <h2>🎧 單字聽力訓練 V6 </h2>
         
         <div id="current-info">
             <span id="current-word">Loading...</span>
