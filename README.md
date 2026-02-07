@@ -52,12 +52,30 @@
 ## 📂 檔案結構說明
 
 *   **`auto_generateMP3.ps1`**: 主控制腳本，一鍵執行所有步驟。
-*   **`vocab_audio_md.py`**: 核心程式。負責讀取 `mp3.md`，呼叫 Edge TTS API 生成語音檔。
+*   **(New) `vocab_audio_openai.py`**: 使用 OpenAI TTS API 生成語音。
+    *   **優點**: 提供更自然的真人發音模型 (`tts-1` / `tts-1-hd`)。
+    *   **注意**: 執行時需輸入 OpenAI API Key，且會產生費用。
+    *   具備「跳過已存在檔案」功能，節省 API 費用。
+*   **`vocab_audio_md.py`**: 使用微軟 Edge TTS (免費) 生成語音。核心程式。
     *   可編輯程式碼中的 `AUDIO_MODE` 來切換是否朗讀例句。
+    *   **更新**: 已加入「跳過已存在 MP3」檢查，若檔案已存在則不會重新生成。
 *   **`create_player_mdV6fixed.py`**: 負責讀取產生的 MP3 與文字資料，生成 HTML 播放器介面。
 *   **`mp3.md`**: (使用者提供) 您的單字筆記來源檔。
-*   **`MP3_Output/`**: 存放生成的 MP3 檔案的資料夾。
+*   **`MP3_Output/`**: 存放使用 Edge TTS 生成的 MP3 檔案。
+*   **`MP3_Output_OpenAI/`**: 存放使用 OpenAI TTS 生成的 MP3 檔案。
 *   **`player_v6_fixed.html`**: 最終產出的網頁播放器。
+
+## 🚀 如何使用 (OpenAI TTS 版本)
+
+1.  確保已安裝 `openai` 套件：
+    ```bash
+    pip install openai
+    ```
+2.  執行程式：
+    ```bash
+    python vocab_audio_openai.py
+    ```
+3.  依照提示輸入 API Key。程式會自動生成 MP3 至 `MP3_Output_OpenAI` 資料夾。
 
 ## ⚙️ 進階設定 (修改程式碼)
 
