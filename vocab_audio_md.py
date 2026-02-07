@@ -85,6 +85,10 @@ async def process_line(index, line, semaphore):
         filename = f"{index:04d}_{safe_filename_text}.mp3"
         filepath = os.path.join(OUTPUT_DIR, filename)
 
+        if os.path.exists(filepath):
+            print(f"⏩ 跳過已存在 [{index:04d}]: {en_word}")
+            return
+
         print(f"處理中 [{index:04d}]: {en_word}")
 
         # 7. 依據模式生成語音片段
