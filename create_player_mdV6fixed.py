@@ -338,6 +338,19 @@ def generate_html():
             }}
         }});
 
+        document.addEventListener('keydown', (e) => {{
+            if (document.activeElement.tagName === "INPUT") return;
+
+            if (e.code === "Space") {{
+                e.preventDefault();
+                togglePlay();
+            }} else if (e.code === "ArrowLeft") {{
+                playPrev();
+            }} else if (e.code === "ArrowRight") {{
+                playNext(true);
+            }}
+        }});
+
         initPlaylist();
         
         const first = playlistData[0];
