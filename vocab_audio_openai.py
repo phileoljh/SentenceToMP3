@@ -144,7 +144,7 @@ async def main():
         valid_count = 0
         for line in lines:
             if not line.strip().startswith("|"): continue
-            if "English" in line or "---" in line: continue
+            if "(序號) English" in line or "---" in line: continue
             
             valid_count += 1
             task = process_line(valid_count, line, client, semaphore)

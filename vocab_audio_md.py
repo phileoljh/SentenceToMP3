@@ -136,7 +136,7 @@ async def main():
     for line in lines:
         # 簡單預判是否為資料行，用於計算序號
         if not line.strip().startswith("|"): continue
-        if "English" in line or "---" in line: continue
+        if "(序號) English" in line or "---" in line: continue
         
         valid_count += 1
         task = process_line(valid_count, line, semaphore)

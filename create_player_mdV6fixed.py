@@ -23,7 +23,7 @@ def parse_md_file(filepath):
         for line in f:
             line = line.strip()
             
-            if not line.startswith("|") or "---" in line or "English" in line:
+            if not line.startswith("|") or "---" in line or "(序號) English" in line:
                 continue
 
             parts = [p.strip() for p in line.split('|') if p.strip()]
