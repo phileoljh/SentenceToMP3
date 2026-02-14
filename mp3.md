@@ -1,6 +1,6 @@
 ## 完整核心詞彙表 (Core Vocabulary 1-20)
 
-| 序號 English | 中文 | 常用搭配句 / 例句 | 中譯 |
+| (序號) English | 中文 | 常用搭配句 / 例句 | 中譯 |
 | :--- | :--- | :--- | :--- |
 | 1. you should roast them into oblivion | 你應該把他們批評得體無完膚 | If they refuse to fix the bug, you should roast them into oblivion on social media. | 如果他們拒絕修復這個錯誤，你應該在社群媒體上狠狠地批評他們。 |
 | 2. bumbling | 笨手笨腳的；常出錯的 | The bumbling assistant dropped the coffee on the client's laptop. | 那個笨手笨腳的助理把咖啡灑在了客戶的筆電上。 |
