@@ -58,9 +58,13 @@ def generate_html():
     text_data = parse_md_file(INPUT_FILE)
     playlist = []
     
+    import urllib.parse
+
     for i, filename in enumerate(mp3_files):
+        # 使用 urllib.parse.quote 進行 URL 編碼，解決特殊字元 (如 %, 空白) 導致網頁無法播放的問題
+        encoded_filename = urllib.parse.quote(filename)
         item = {
-            "file": f"{MP3_DIR}/{filename}",
+            "file": f"{MP3_DIR}/{encoded_filename}",
             "word": filename.replace(".mp3", ""),
             "meaning": "",
             "sentence": "",
