@@ -54,7 +54,7 @@ async def process_line(index, line, semaphore):
         
         # 2. 過濾無效行 (空行、表頭、分隔線)
         if not line.startswith("|"): return
-        if "English" in line and "中文" in line: return  # 過濾表頭
+        if "| English |" in line or "(序號) English" in line: return  # 過濾表頭
         if "---" in line: return  # 過濾分隔線
 
         # 3. 解析表格欄位
@@ -136,7 +136,7 @@ async def main():
     for line in lines:
         # 簡單預判是否為資料行，用於計算序號
         if not line.strip().startswith("|"): continue
-        if "(序號) English" in line or "---" in line: continue
+        if "| English |" in line or "(序號) English" in line or "---" in line: continue
         
         valid_count += 1
         task = process_line(valid_count, line, semaphore)
