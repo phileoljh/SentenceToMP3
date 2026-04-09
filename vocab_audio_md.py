@@ -34,17 +34,31 @@ zh-TW-HsiaoYuNeural,女聲,較為年輕、輕快，適合輕鬆內容
 AUDIO_MODE = 2 
 # ========================================
 
-async def get_audio_bytes(text, voice):
-    """呼叫 edge-tts 生成語音並回傳二進位資料"""
-    content = b""
-    try:
-        communicate = edge_tts.Communicate(text, voice)
-        async for chunk in communicate.stream():
-            if chunk["type"] == "audio":
-                content += chunk["data"]
-    except Exception as e:
-        print(f"   ⚠️ 語音生成錯誤 [{text}]: {e}")
-    return content
+async def get_audio_bytes(text, voice, max_retries=3, delay=2):
+    """呼叫 edge-tts 生成語音並回傳二進位資料，包含重試機制"""
+    for attempt in range(max_retries):
+        content = b""
+        try:
+            communicate = edge_tts.Communicate(text, voice)
+            async for chunk in communicate.stream():
+                if chunk["type"] == "audio":
+                    content += chunk["data"]
+            
+            if content:
+                return content
+            
+            # 如果跑完 loop 但 content 還是空的
+            print(f"   ⚠️ 語音生成內容為空 [{text}] (第 {attempt + 1} 次嘗試)")
+        except Exception as e:
+            # 判斷是否為常見的網路問題或參數問題
+            print(f"   ⚠️ 語音生成錯誤 [{text}]: {e} (第 {attempt + 1} 次嘗試)")
+        
+        if attempt < max_retries - 1:
+            await asyncio.sleep(delay)
+            
+    print(f"   ❌ 語音生成失敗 [{text}]，已達到最大重試次數 ({max_retries})")
+    return b""
+
 
 async def process_line(index, line, semaphore):
     """處理單一行 Markdown 表格資料"""
