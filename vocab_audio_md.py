@@ -60,6 +60,27 @@ async def get_audio_bytes(text, voice, max_retries=3, delay=2):
     return b""
 
 
+def clean_text_for_tts(text):
+    """
+    清洗送交 TTS 的文字，防止標點符號組合成表情符號導致誤讀。
+    
+    原因：TTS 引擎（如 Edge TTS）會將 ";(" 或 ":)" 識別為表情符號並讀出含義。
+    解決方式：在連續的標點符號中間插入空格，打破表情符號的識別特徵。
+    """
+    if not text:
+        return ""
+    
+    # 使用正規表達式在連續的標點符號（非字母數字、非空白）中間插入空格
+    # \1 代表匹配到的第一個字元，其後補一個空格
+    # 例如：";(" 變為 "; ("
+    cleaned = re.sub(r'([^\w\s])(?=[^\w\s])', r'\1 ', text)
+    
+    # 針對一些字母組成的常見表情符號（如 XD）也進行分隔
+    cleaned = re.sub(r'([X])(?=[D])', r'\1 ', cleaned, flags=re.IGNORECASE)
+    
+    return cleaned
+
+
 async def process_line(index, line, semaphore):
     """處理單一行 Markdown 表格資料"""
     async with semaphore:
@@ -109,15 +130,15 @@ async def process_line(index, line, semaphore):
         audio_segments = []
         
         # 片段 A: 單字
-        audio_segments.append(await get_audio_bytes(en_word, VOICE_EN_WORD))
+        audio_segments.append(await get_audio_bytes(clean_text_for_tts(en_word), VOICE_EN_WORD))
         
         # 片段 B: 中文釋義
         if zh_def:
-            audio_segments.append(await get_audio_bytes(zh_def, VOICE_ZH))
+            audio_segments.append(await get_audio_bytes(clean_text_for_tts(zh_def), VOICE_ZH))
 
         # 片段 C: 英文例句 (僅模式 2 且有例句時)
         if AUDIO_MODE == 2 and en_sentence and en_sentence != "":
-            audio_segments.append(await get_audio_bytes(en_sentence, VOICE_EN_SENT))
+            audio_segments.append(await get_audio_bytes(clean_text_for_tts(en_sentence), VOICE_EN_SENT))
 
         # 8. 寫入檔案 (合併所有片段)
         try:

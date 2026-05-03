@@ -42,6 +42,22 @@ async def get_audio_bytes(client, text, voice):
         print(f"   ⚠️ 語音生成錯誤 [{text}]: {e}")
         return b""
 
+
+def clean_text_for_tts(text):
+    """
+    清洗送交 TTS 的文字，防止標點符號組合成表情符號導致誤讀。
+    """
+    if not text:
+        return ""
+    
+    # 使用正規表達式在連續的標點符號中間插入空格
+    cleaned = re.sub(r'([^\w\s])(?=[^\w\s])', r'\1 ', text)
+    
+    # 針對一些字母組成的常見表情符號（如 XD）也進行分隔
+    cleaned = re.sub(r'([X])(?=[D])', r'\1 ', cleaned, flags=re.IGNORECASE)
+    
+    return cleaned
+
 async def process_line(index, line, client, semaphore):
     """處理單一行 Markdown 表格資料"""
     async with semaphore:
@@ -87,17 +103,17 @@ async def process_line(index, line, client, semaphore):
         audio_segments = []
         
         # 片段 A: 單字
-        seg_a = await get_audio_bytes(client, en_word, VOICE_EN_WORD)
+        seg_a = await get_audio_bytes(client, clean_text_for_tts(en_word), VOICE_EN_WORD)
         if seg_a: audio_segments.append(seg_a)
         
         # 片段 B: 中文釋義
         if zh_def:
-            seg_b = await get_audio_bytes(client, zh_def, VOICE_ZH)
+            seg_b = await get_audio_bytes(client, clean_text_for_tts(zh_def), VOICE_ZH)
             if seg_b: audio_segments.append(seg_b)
 
         # 片段 C: 英文例句
         if AUDIO_MODE == 2 and en_sentence:
-            seg_c = await get_audio_bytes(client, en_sentence, VOICE_EN_SENT)
+            seg_c = await get_audio_bytes(client, clean_text_for_tts(en_sentence), VOICE_EN_SENT)
             if seg_c: audio_segments.append(seg_c)
 
         # 8. 寫入檔案
