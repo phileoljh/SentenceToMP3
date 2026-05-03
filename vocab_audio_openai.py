@@ -70,17 +70,24 @@ async def process_line(index, line, client, semaphore):
         if "---" in line: return
 
         # 3. 解析表格欄位
-        parts = [p.strip() for p in line.split('|') if p.strip()]
-        
-        if len(parts) < 2: return
+        parts = [p.strip() for p in line.split('|')]
+        # 去除 split 產生的頭尾空元素
+        if parts[0] == "": parts.pop(0)
+        if parts and parts[-1] == "": parts.pop()
 
-        # 4. 提取資料
-        raw_word_col = parts[0]
-        zh_def = parts[1]
-        
-        en_sentence = ""
-        if len(parts) >= 3:
-            en_sentence = parts[2]
+        # 4. 偵測與提取資料 (自動相容 4 或 5 欄位)
+        if len(parts) >= 5:
+            # 5 欄位格式: | 序號 | 英文 | 中文 | 例句 | 中文例句 |
+            raw_word_col = parts[1]
+            zh_def = parts[2]
+            en_sentence = parts[3]
+        elif len(parts) >= 2:
+            # 4 欄位格式: | (序號) 英文 | 中文 | 例句 | 中譯 |
+            raw_word_col = parts[0]
+            zh_def = parts[1]
+            en_sentence = parts[2] if len(parts) >= 3 else ""
+        else:
+            return
 
         # 5. 清理單字
         en_word = re.sub(r'^\d+\.\s*', '', raw_word_col)
@@ -160,7 +167,9 @@ async def main():
         valid_count = 0
         for line in lines:
             if not line.strip().startswith("|"): continue
-            if "(序號) English" in line or "---" in line: continue
+            # 過濾表頭關鍵字
+            header_keywords = ["English", "(序號)", "序號", "英文片語", "---"]
+            if any(kw in line for kw in header_keywords): continue
             
             valid_count += 1
             task = process_line(valid_count, line, client, semaphore)

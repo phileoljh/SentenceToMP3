@@ -23,24 +23,40 @@ def parse_md_file(filepath):
         for line in f:
             line = line.strip()
             
-            if not line.startswith("|") or "---" in line or "| English |" in line or "(序號) English" in line:
+            if not line.startswith("|"):
                 continue
+            
+            # 過濾表頭關鍵字 (包含 4 欄與 5 欄格式)
+            header_keywords = ["English", "(序號)", "序號", "英文片語", "---"]
+            if any(kw in line for kw in header_keywords): continue
 
-            parts = [p.strip() for p in line.split('|') if p.strip()]
+            parts = [p.strip() for p in line.split('|')]
+            # 去除 split 產生的頭尾空元素
+            if parts[0] == "": parts.pop(0)
+            if parts and parts[-1] == "": parts.pop()
 
-            if len(parts) >= 2:
+            if len(parts) >= 5:
+                # 5 欄位格式: | 序號 | 英文 | 中文 | 例句 | 中文例句 |
+                raw_word = parts[1]
+                meaning = parts[2]
+                sentence = parts[3]
+                sentence_trans = parts[4] if len(parts) >= 5 else ""
+            elif len(parts) >= 2:
+                # 4 欄位格式: | (序號) 英文 | 中文 | 例句 | 中譯 |
                 raw_word = parts[0]
-                clean_word = re.sub(r'^\d+\.\s*', '', raw_word)
                 meaning = parts[1]
                 sentence = parts[2] if len(parts) >= 3 else ""
                 sentence_trans = parts[3] if len(parts) >= 4 else ""
+            else:
+                continue
 
-                word_data.append({
-                    "word": clean_word,
-                    "meaning": meaning,
-                    "sentence": sentence,
-                    "sentence_trans": sentence_trans
-                })
+            clean_word = re.sub(r'^\d+\.\s*', '', raw_word)
+            word_data.append({
+                "word": clean_word,
+                "meaning": meaning,
+                "sentence": sentence,
+                "sentence_trans": sentence_trans
+            })
     return word_data
 
 def generate_html():

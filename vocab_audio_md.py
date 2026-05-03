@@ -94,20 +94,27 @@ async def process_line(index, line, semaphore):
 
         # 3. 解析表格欄位
         # Markdown 表格通常以 | 分隔，split後頭尾會產生空字串，故需過濾
-        parts = [p.strip() for p in line.split('|') if p.strip()]
-        
-        # 確保欄位數量足夠 (序號單字, 中文, 例句, 中譯) 至少要有前兩個
-        if len(parts) < 2:
-            return
+        parts = [p.strip() for p in line.split('|')]
+        # 去除 split 產生的頭尾空元素 (若表格開頭結尾都有 |)
+        if parts[0] == "": parts.pop(0)
+        if parts and parts[-1] == "": parts.pop()
 
-        # 4. 提取資料
-        raw_word_col = parts[0]  # 第一欄：(序號) English
-        zh_def = parts[1]        # 第二欄：中文
+        # 4. 偵測與提取資料 (自動相容 4 或 5 欄位)
+        # 5 欄位格式: | 序號 | 英文 | 中文 | 例句 | 中文例句 | (parts 長度為 5)
+        # 4 欄位格式: | (序號) 英文 | 中文 | 例句 | 中譯 | (parts 長度為 4)
         
-        # 提取例句 (如果有的話，且模式需要)
-        en_sentence = ""
-        if len(parts) >= 3:
-            en_sentence = parts[2] # 第三欄：常用搭配句
+        if len(parts) >= 5:
+            # 假設為 5 欄位格式，英文在第 2 欄 (index 1)
+            raw_word_col = parts[1]
+            zh_def = parts[2]
+            en_sentence = parts[3]
+        elif len(parts) >= 2:
+            # 假設為 4 欄位格式，英文在第 1 欄 (index 0)
+            raw_word_col = parts[0]
+            zh_def = parts[1]
+            en_sentence = parts[2] if len(parts) >= 3 else ""
+        else:
+            return
 
         # 5. 清理單字 (去除序號 "1. ", "2. " 等)
         # Regex: 抓取開頭的數字加點，並替換為空
@@ -171,7 +178,9 @@ async def main():
     for line in lines:
         # 簡單預判是否為資料行，用於計算序號
         if not line.strip().startswith("|"): continue
-        if "| English |" in line or "(序號) English" in line or "---" in line: continue
+        # 過濾表頭關鍵字 (包含 4 欄與 5 欄格式)
+        header_keywords = ["English", "(序號)", "序號", "英文片語", "---"]
+        if any(kw in line for kw in header_keywords): continue
         
         valid_count += 1
         task = process_line(valid_count, line, semaphore)
