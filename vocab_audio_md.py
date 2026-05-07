@@ -136,24 +136,36 @@ async def process_line(index, line, semaphore):
         # 7. 依據模式生成語音片段
         audio_segments = []
         
-        # 片段 A: 單字
-        audio_segments.append(await get_audio_bytes(clean_text_for_tts(en_word), VOICE_EN_WORD))
+        # 片段 A: 單字 (核心片段)
+        seg_word = await get_audio_bytes(clean_text_for_tts(en_word), VOICE_EN_WORD)
+        if not seg_word:
+            print(f"⚠️ 跳過處理 [{index:04d}]: 單字音軌生成失敗 ({en_word})")
+            return
+        audio_segments.append(seg_word)
         
         # 片段 B: 中文釋義
         if zh_def:
-            audio_segments.append(await get_audio_bytes(clean_text_for_tts(zh_def), VOICE_ZH))
+            seg_zh = await get_audio_bytes(clean_text_for_tts(zh_def), VOICE_ZH)
+            if not seg_zh:
+                print(f"⚠️ 跳過處理 [{index:04d}]: 中文釋義音軌生成失敗 ({en_word})")
+                return
+            audio_segments.append(seg_zh)
 
         # 片段 C: 英文例句 (僅模式 2 且有例句時)
         if AUDIO_MODE == 2 and en_sentence and en_sentence != "":
-            audio_segments.append(await get_audio_bytes(clean_text_for_tts(en_sentence), VOICE_EN_SENT))
+            seg_sent = await get_audio_bytes(clean_text_for_tts(en_sentence), VOICE_EN_SENT)
+            if not seg_sent:
+                print(f"⚠️ 跳過處理 [{index:04d}]: 例句音軌生成失敗 ({en_word})")
+                return
+            audio_segments.append(seg_sent)
 
         # 8. 寫入檔案 (合併所有片段)
+        total_audio = b"".join(audio_segments)
         try:
             with open(filepath, "wb") as out_f:
-                for segment in audio_segments:
-                    out_f.write(segment)
+                out_f.write(total_audio)
         except Exception as e:
-            print(f"❌ 寫入失敗: {e}")
+            print(f"❌ 寫入失敗 [{index:04d}]: {e}")
 
 async def main():
     # 建立輸出目錄

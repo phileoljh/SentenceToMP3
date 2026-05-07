@@ -29,18 +29,25 @@ VOICE_ZH = "shimmer"         # 唸中文 (女聲)
 AUDIO_MODE = 2 
 # ========================================
 
-async def get_audio_bytes(client, text, voice):
-    """呼叫 OpenAI API 生成語音並回傳二進位資料"""
-    try:
-        response = await client.audio.speech.create(
-            model=MODEL_NAME,
-            voice=voice,
-            input=text
-        )
-        return response.content
-    except Exception as e:
-        print(f"   ⚠️ 語音生成錯誤 [{text}]: {e}")
-        return b""
+async def get_audio_bytes(client, text, voice, max_retries=3, delay=2):
+    """呼叫 OpenAI API 生成語音並回傳二進位資料，包含重試機制"""
+    for attempt in range(max_retries):
+        try:
+            response = await client.audio.speech.create(
+                model=MODEL_NAME,
+                voice=voice,
+                input=text
+            )
+            if response.content:
+                return response.content
+        except Exception as e:
+            print(f"   ⚠️ 語音生成錯誤 [{text}]: {e} (第 {attempt + 1} 次嘗試)")
+        
+        if attempt < max_retries - 1:
+            await asyncio.sleep(delay)
+            
+    print(f"   ❌ 語音生成失敗 [{text}]，已達到最大重試次數 ({max_retries})")
+    return b""
 
 
 def clean_text_for_tts(text):
@@ -111,26 +118,34 @@ async def process_line(index, line, client, semaphore):
         
         # 片段 A: 單字
         seg_a = await get_audio_bytes(client, clean_text_for_tts(en_word), VOICE_EN_WORD)
-        if seg_a: audio_segments.append(seg_a)
+        if not seg_a:
+            print(f"⚠️ 跳過處理 [{index:04d}]: 單字音軌生成失敗 ({en_word})")
+            return
+        audio_segments.append(seg_a)
         
         # 片段 B: 中文釋義
         if zh_def:
             seg_b = await get_audio_bytes(client, clean_text_for_tts(zh_def), VOICE_ZH)
-            if seg_b: audio_segments.append(seg_b)
+            if not seg_b:
+                print(f"⚠️ 跳過處理 [{index:04d}]: 中文釋義音軌生成失敗 ({en_word})")
+                return
+            audio_segments.append(seg_b)
 
         # 片段 C: 英文例句
         if AUDIO_MODE == 2 and en_sentence:
             seg_c = await get_audio_bytes(client, clean_text_for_tts(en_sentence), VOICE_EN_SENT)
-            if seg_c: audio_segments.append(seg_c)
+            if not seg_c:
+                print(f"⚠️ 跳過處理 [{index:04d}]: 例句音軌生成失敗 ({en_word})")
+                return
+            audio_segments.append(seg_c)
 
         # 8. 寫入檔案
-        if audio_segments:
-            try:
-                with open(filepath, "wb") as out_f:
-                    for segment in audio_segments:
-                        out_f.write(segment)
-            except Exception as e:
-                print(f"❌ 寫入失敗: {e}")
+        total_audio = b"".join(audio_segments)
+        try:
+            with open(filepath, "wb") as out_f:
+                out_f.write(total_audio)
+        except Exception as e:
+            print(f"❌ 寫入失敗 [{index:04d}]: {e}")
 
 async def main():
     # 0. 輸入 API Key
