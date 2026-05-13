@@ -57,6 +57,9 @@ def clean_text_for_tts(text):
     if not text:
         return ""
     
+    # 將斜線替換為逗號，避免 TTS 唸出「斜線」並增加停頓感
+    text = text.replace("/", ",")
+    
     # 使用正規表達式在連續的標點符號中間插入空格
     cleaned = re.sub(r'([^\w\s])(?=[^\w\s])', r'\1 ', text)
     

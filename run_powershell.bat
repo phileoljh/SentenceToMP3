@@ -1,8 +1,12 @@
 @echo off
-:: 不切換目錄，保留當前執行環境的目錄 (CWD)
+title "TTS Audio Generator"
+set "ScriptDir=%~dp0"
 
-:: 使用絕對路徑執行主目錄下的 PowerShell 腳本 (Bypass 執行策略限制)
-powershell -ExecutionPolicy Bypass -File "%~dp0auto_generateMP3.ps1"
+echo [TTS] Starting...
 
-:: 暫停畫面，確保視窗不會執行完瞬間關閉 (方便查看結果或錯誤訊息)
+python "%ScriptDir%vocab_audio_md.py"
+python "%ScriptDir%create_player_mdV6fixed.py"
+
+echo.
+echo [TTS] Done!
 pause
