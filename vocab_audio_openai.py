@@ -6,7 +6,7 @@ from openai import AsyncOpenAI
 
 # =================設定區=================
 INPUT_FILE = "mp3.md"            # 輸入的 Markdown 檔案
-OUTPUT_DIR = "MP3_Output_OpenAI" # 輸出的資料夾名稱 (區分開原本的資料夾)
+OUTPUT_DIR = "MP3_Output"        # 輸出的資料夾名稱
 
 # OpenAI 語音設定 (model: tts-1 or tts-1-hd)
 MODEL_NAME = "tts-1"
@@ -151,16 +151,27 @@ async def process_line(index, line, client, semaphore):
             print(f"❌ 寫入失敗 [{index:04d}]: {e}")
 
 async def main():
-    # 0. 輸入 API Key
-    print("="*40)
-    api_key = getpass.getpass("🔑 請輸入您的 OpenAI API Key (輸入時不會顯示): ")
+    # 0. 讀取 .env 或輸入 API Key
+    if os.path.exists(".env"):
+        with open(".env", "r", encoding="utf-8") as f:
+            for line in f:
+                if "=" in line:
+                    k, v = line.strip().split("=", 1)
+                    os.environ[k] = v
+    
+    api_key = os.getenv("OPENAI_API_KEY")
+    
     if not api_key:
-        api_key = input("   (或是直接在此輸入): ") # 作為備用，有些環境 getpass 可能有問題
+        print("="*40)
+        print("💡 未在 .env 中偵測到 OPENAI_API_KEY，改為手動輸入。")
+        api_key = getpass.getpass("🔑 請輸入您的 OpenAI API Key (輸入時不會顯示): ")
+        if not api_key:
+            api_key = input("   (或是直接在此輸入): ") # 作為備用，有些環境 getpass 可能有問題
+        print("="*40)
     
     if not api_key:
         print("❌ 未輸入 API Key，程式結束。")
         return
-    print("="*40)
 
     # 建立輸出目錄
     if not os.path.exists(OUTPUT_DIR):
