@@ -1,0 +1,924 @@
+import os
+import json
+import re
+import urllib.parse
+
+# =================設定區=================
+MP3_DIR = "MP3_Output"                 # MP3 音檔儲存資料夾
+INPUT_FILE = "mp3.md"                  # 來源 Markdown 單字檔案
+JS_PLAYLIST_FILE = "playlist.js"       # 產出的解耦資料檔名
+HTML_FILE = "player.html" # 產出的全域單一播放器網頁檔名
+# ========================================
+
+def parse_md_file(filepath):
+    """
+    解析 Markdown 表格格式的 mp3.md 檔案
+    支援 4 欄或 5 欄表格結構
+    格式範例: | (序號) English | 中文 | 例句 | 例句中譯 |
+    """
+    word_data = []
+    
+    if not os.path.exists(filepath):
+        print(f"⚠️ 警告：找不到 {filepath}，網頁將只顯示音檔名稱。")
+        return []
+
+    with open(filepath, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            
+            # 僅處理表格行
+            if not line.startswith("|"):
+                continue
+            
+            # 過濾無效表頭與分隔線
+            header_keywords = ["English", "(序號)", "序號", "英文片語", "---"]
+            if any(kw in line for kw in header_keywords): 
+                continue
+
+            # 使用管線符號分割欄位
+            parts = [p.strip() for p in line.split('|')]
+            # 去除 split 產生的頭尾空元素 (若表格開頭結尾都有 |)
+            if parts[0] == "": 
+                parts.pop(0)
+            if parts and parts[-1] == "": 
+                parts.pop()
+
+            # 偵測並相容 4 欄或 5 欄格式
+            if len(parts) >= 5:
+                # 5 欄位格式: | 序號 | 英文 | 中文 | 例句 | 中文例句 |
+                raw_word = parts[1]
+                meaning = parts[2]
+                sentence = parts[3]
+                sentence_trans = parts[4]
+            elif len(parts) >= 2:
+                # 4 欄位格式: | (序號) 英文 | 中文 | 例句 | 中譯 |
+                raw_word = parts[0]
+                meaning = parts[1]
+                sentence = parts[2] if len(parts) >= 3 else ""
+                sentence_trans = parts[3] if len(parts) >= 4 else ""
+            else:
+                continue
+
+            # 清理單字開頭的數字序號 (如 "1. apple" 轉為 "apple")
+            clean_word = re.sub(r'^\d+\.\s*', '', raw_word)
+            word_data.append({
+                "word": clean_word,
+                "meaning": meaning,
+                "sentence": sentence,
+                "sentence_trans": sentence_trans
+            })
+    return word_data
+
+def generate_player():
+    """
+    主生成函式：
+    1. 掃描 MP3 檔案並比對 md 檔案資料。
+    2. 生成 playlist.js 資料檔。
+    3. 生成 player_v7_decoupled.html 播放器網頁引擎。
+    """
+    if not os.path.exists(MP3_DIR):
+        print(f"❌ 錯誤：找不到 {MP3_DIR} 資料夾")
+        return
+
+    # 讀取並排序所有 MP3 音檔
+    mp3_files = [f for f in os.listdir(MP3_DIR) if f.lower().endswith('.mp3')]
+    mp3_files.sort() 
+
+    if not mp3_files:
+        print("⚠️ 警告：資料夾內沒有偵測到任何 MP3 檔案")
+        return
+
+    # 解析單字清單資料
+    text_data = parse_md_file(INPUT_FILE)
+    playlist = []
+    
+    # 建立播放清單結構
+    for i, filename in enumerate(mp3_files):
+        # 進行 URL 編碼以解決特殊字元 (如空白、百分比) 在網頁載入時的 CORS 或解析失敗問題
+        encoded_filename = urllib.parse.quote(filename)
+        item = {
+            "file": f"{MP3_DIR}/{encoded_filename}",
+            "word": filename.replace(".mp3", ""),
+            "meaning": "",
+            "sentence": "",
+            "sentence_trans": ""
+        }
+        
+        # 若 md 資料項數足夠，則將單字、釋義、例句與中譯進行填充
+        if i < len(text_data):
+            item["word"] = text_data[i]["word"]
+            item["meaning"] = text_data[i]["meaning"]
+            item["sentence"] = text_data[i]["sentence"]
+            item["sentence_trans"] = text_data[i]["sentence_trans"]
+            
+        playlist.append(item)
+
+    # 1. 寫入解耦後的 playlist.js 檔案
+    # 透過 window.playlistData 宣告，讓本地端 (file://) 可以無障礙載入，避開 CORS 同源政策限制
+    js_playlist_content = f"window.playlistData = {json.dumps(playlist, ensure_ascii=False, indent=2)};"
+    with open(JS_PLAYLIST_FILE, "w", encoding="utf-8") as js_f:
+        js_f.write(js_playlist_content)
+    print(f"✅ 資料解耦完成！已生成: {JS_PLAYLIST_FILE}")
+
+    # 2. 寫入高質感解耦播放器 player_v7_decoupled.html 檔案
+    html_content = f"""<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>單字聽力訓練 V7 (毛玻璃解耦版)</title>
+    <!-- 載入 Google Fonts 設計字體與 Font Awesome 6 圖示 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        :root {{
+            --bg-color: #0f172a;
+            --surface-color: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.08);
+            --primary-color: #6366f1;
+            --primary-glow: rgba(99, 102, 241, 0.3);
+            --accent-success: #10b981;
+            --accent-success-glow: rgba(16, 185, 129, 0.2);
+            --text-main: #f8fafc;
+            --text-dim: #94a3b8;
+            --card-radius: 20px;
+            --btn-radius: 10px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }}
+
+        * {{
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }}
+
+        body {{
+            background-color: var(--bg-color);
+            background-image:
+                radial-gradient(circle at 10% 10%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+                radial-gradient(circle at 90% 90%, rgba(236, 72, 153, 0.08) 0%, transparent 40%);
+            color: var(--text-main);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            line-height: 1.6;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0;
+        }}
+
+        .app-container {{
+            width: 100%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }}
+
+        /* 固定頂部控制面板，採用高級毛玻璃質感 */
+        .player-header {{
+            position: sticky;
+            top: 0;
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            border-bottom: 1px solid var(--border-color);
+            border-bottom-left-radius: var(--card-radius);
+            border-bottom-right-radius: var(--card-radius);
+        }}
+
+        .header-title {{
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 15px;
+            background: linear-gradient(135deg, #fff 40%, var(--primary-color) 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -0.02em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }}
+
+        .header-title i {{
+            color: var(--primary-color);
+            -webkit-text-fill-color: initial;
+        }}
+
+        /* 目前播放單字卡片 */
+        #current-info {{
+            text-align: center;
+            margin-bottom: 15px;
+            min-height: 140px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 15px;
+            box-shadow: inset 0 0 12px rgba(255, 255, 255, 0.03);
+            transition: var(--transition);
+        }}
+
+        #current-word {{
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 6px;
+            letter-spacing: -0.01em;
+            transition: var(--transition);
+        }}
+
+        #current-meaning {{
+            font-size: 1.05rem;
+            color: var(--primary-color);
+            font-weight: 600;
+            margin-bottom: 8px;
+        }}
+        
+        .sentence-box {{
+            margin-top: 5px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }}
+        
+        #current-sentence {{
+            font-size: 0.9rem;
+            color: var(--text-dim);
+            font-style: italic;
+            line-height: 1.4;
+        }}
+        
+        #current-sentence-trans {{
+            font-size: 0.85rem;
+            color: rgba(148, 163, 184, 0.7);
+        }}
+        
+        /* 播放器按鈕樣式 */
+        audio {{
+            width: 100%;
+            margin-bottom: 12px;
+            height: 40px;
+            border-radius: 30px;
+            opacity: 0.9;
+        }}
+
+        /* 控制按鈕組 */
+        .btn-group {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+        }}
+
+        button.player-btn {{
+            width: 44px;
+            height: 44px;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 1.1rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }}
+
+        button.player-btn:hover {{
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--text-dim);
+            transform: scale(1.05);
+        }}
+
+        button.player-btn:active {{
+            transform: scale(0.95);
+        }}
+
+        #playPauseBtn {{
+            width: 110px;
+            border-radius: var(--btn-radius);
+            background: var(--primary-color);
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: white;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px var(--primary-glow);
+        }}
+
+        #playPauseBtn:hover {{
+            background: #4f46e5;
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
+        }}
+
+        /* 間隔與搜尋控制台 */
+        .controls-panel {{
+            display: grid;
+            grid-template-columns: 1fr 1.3fr;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            padding: 10px;
+            border-radius: 12px;
+        }}
+
+        .control-item {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+        }}
+
+        .control-item label {{
+            white-space: nowrap;
+        }}
+
+        .control-item input {{
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            color: #fff;
+            padding: 6px 8px;
+            border-radius: 6px;
+            width: 100%;
+            font-size: 0.85rem;
+            outline: none;
+            transition: var(--transition);
+        }}
+
+        .control-item input:focus {{
+            border-color: var(--primary-color);
+            box-shadow: 0 0 8px var(--primary-glow);
+        }}
+
+        /* 即時搜尋框樣式 */
+        .search-container {{
+            margin: 15px 0 0 0;
+            position: relative;
+        }}
+
+        .search-container i {{
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-dim);
+            font-size: 0.9rem;
+        }}
+
+        #searchInput {{
+            width: 100%;
+            background: rgba(15, 23, 42, 0.5);
+            border: 1px solid var(--border-color);
+            color: #fff;
+            padding: 10px 12px 10px 36px;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            outline: none;
+            transition: var(--transition);
+        }}
+
+        #searchInput:focus {{
+            border-color: var(--primary-color);
+            box-shadow: 0 0 10px var(--primary-glow);
+            background: rgba(15, 23, 42, 0.7);
+        }}
+
+        /* 下方播放清單容器 */
+        .playlist-container {{
+            padding: 20px;
+            flex-grow: 1;
+            padding-bottom: 200px;
+            width: 100%;
+        }}
+
+        .playlist {{
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }}
+
+        .playlist li {{
+            padding: 12px 15px;
+            background: var(--surface-color);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            transition: var(--transition);
+        }}
+
+        .playlist li:hover {{
+            transform: translateY(-2px);
+            border-color: rgba(99, 102, 241, 0.25);
+            background: rgba(30, 41, 59, 0.9);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }}
+
+        .playlist li.active {{
+            background: rgba(99, 102, 241, 0.15);
+            border-color: var(--primary-color);
+            box-shadow: 0 0 15px rgba(99, 102, 241, 0.1);
+        }}
+
+        .track-num {{
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            width: 32px;
+            text-align: center;
+            font-weight: 600;
+            flex-shrink: 0;
+        }}
+
+        .track-content {{
+            flex-grow: 1;
+            margin-left: 10px;
+            overflow: hidden;
+        }}
+
+        .track-word {{
+            font-weight: 700;
+            font-size: 1rem;
+            color: #fff;
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+
+        .track-meaning {{
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+            margin-top: 2px;
+        }}
+
+        .playlist li.active .track-word {{
+            color: var(--primary-color);
+        }}
+
+        /* 休息中倒數狀態效果 */
+        .resting-state #current-info {{
+            border-color: var(--accent-success);
+            box-shadow: 0 0 15px var(--accent-success-glow);
+        }}
+
+        .resting-state #current-word {{
+            color: var(--accent-success);
+        }}
+
+        /* 找不到搜尋結果之空狀態 */
+        .empty-search {{
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-dim);
+            font-size: 0.95rem;
+        }}
+
+        .empty-search i {{
+            font-size: 2rem;
+            margin-bottom: 12px;
+            color: rgba(255,255,255,0.15);
+            display: block;
+        }}
+    </style>
+</head>
+<body>
+
+    <div class="app-container" id="appBody">
+        <div class="player-header">
+            <h2 class="header-title"><i class="fa-solid fa-graduation-cap"></i> 聽力大師 V7 (解耦版)</h2>
+            
+            <!-- 目前朗讀單字顯示區 -->
+            <div id="current-info">
+                <span id="current-word">讀取清單中...</span>
+                <span id="current-meaning"></span>
+                
+                <div class="sentence-box">
+                    <span id="current-sentence"></span>
+                    <span id="current-sentence-trans"></span>
+                </div>
+            </div>
+
+            <!-- HTML5 音源器 -->
+            <audio id="audioPlayer" controls></audio>
+            
+            <!-- 播控按鈕區 -->
+            <div class="btn-group">
+                <button class="player-btn" onclick="playPrev()" title="上一首"><i class="fa-solid fa-backward-step"></i></button>
+                <button class="player-btn" id="playPauseBtn" onclick="togglePlay()"><i class="fa-solid fa-play"></i> 播放</button>
+                <button class="player-btn" onclick="playNext(true)" title="下一首"><i class="fa-solid fa-forward-step"></i></button>
+            </div>
+
+            <!-- 控制台面版 -->
+            <div class="controls-panel">
+                <div class="control-item">
+                    <label><i class="fa-solid fa-hourglass-half"></i> 間隔(秒)</label>
+                    <input type="number" id="delayInput" value="1.0" min="0" step="0.5" style="max-width: 80px;">
+                </div>
+                <div class="control-item" style="justify-content: flex-end; width: 100%; gap: 6px;">
+                    <label>跳至</label>
+                    <input type="number" id="jumpInput" placeholder="編號" min="1" style="width: 100%; max-width: 95px;">
+                    <button onclick="jumpToTrack()" style="padding: 6px 12px; background: var(--primary-color); border: none; color: white; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; white-space: nowrap; transition: var(--transition);">跳轉</button>
+                </div>
+            </div>
+
+            <!-- 搜尋過濾器 -->
+            <div class="search-container">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="searchInput" placeholder="在清單中搜尋英文單字或中文釋義..." oninput="filterPlaylist()">
+            </div>
+        </div>
+
+        <!-- 播放清單區 -->
+        <div class="playlist-container">
+            <ul class="playlist" id="playlist-ui"></ul>
+        </div>
+    </div>
+
+    <!-- 移除靜態引入，改為動態載入以相容全域播放與本地 CORS 限制 -->
+
+    <script>
+        let rawPlaylist = [];
+        let activePlaylist = [];
+        let activeIndices = [];
+
+        let currentIndex = 0;       // 目前播音的原始索引
+        let gapTimer = null;        // 間隔計時器
+        let gapRemaining = 0;       // 剩餘間隔毫秒數
+        let gapStartTime = 0;       // 間隔開始時間戳記
+        let isGapPaused = false;    // 是否暫停間隔倒數
+        let restIntervalId = null;  // 倒數視覺刷新計時器
+
+        const appBody = document.getElementById('appBody');
+        const audio = document.getElementById('audioPlayer');
+        const displayWord = document.getElementById('current-word');
+        const displayMeaning = document.getElementById('current-meaning');
+        const displaySentence = document.getElementById('current-sentence');
+        const displaySentenceTrans = document.getElementById('current-sentence-trans');
+        const playlistUi = document.getElementById('playlist-ui');
+        const delayInput = document.getElementById('delayInput');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const jumpInput = document.getElementById('jumpInput');
+        const searchInput = document.getElementById('searchInput');
+
+        // 1. 解析網址參數
+        const urlParams = new URLSearchParams(window.location.search);
+        const packName = urlParams.get('pack') || '';
+
+        // 2. 動態加載資料檔與修正路徑
+        function loadDataAndInit() {{
+            if (packName) {{
+                const script = document.createElement('script');
+                script.src = `${{encodeURIComponent(packName)}}/playlist.js`;
+                script.onerror = () => {{
+                    showError(`無法載入詞彙包 "${{packName}}" 的資料，請確認資料夾與 playlist.js 是否存在。`);
+                }};
+                script.onload = () => {{
+                    if (window.playlistData && window.playlistData.length > 0) {{
+                        // 在音檔路徑前方補上子目錄路徑前綴
+                        window.playlistData.forEach(item => {{
+                            item.file = `${{packName}}/${{item.file}}`;
+                        }});
+                        rawPlaylist = window.playlistData;
+                        activePlaylist = [...rawPlaylist];
+                        activeIndices = rawPlaylist.map((_, i) => i);
+                        initPlayer();
+                    }} else {{
+                        showError(`詞彙包 "${{packName}}" 內無有效單字資料。`);
+                    }}
+                }};
+                document.head.appendChild(script);
+            }} else {{
+                const script = document.createElement('script');
+                script.src = 'playlist.js';
+                script.onerror = () => {{
+                    showError("找不到根目錄的 playlist.js。請確認已執行生成腳本！");
+                }};
+                script.onload = () => {{
+                    if (window.playlistData && window.playlistData.length > 0) {{
+                        rawPlaylist = window.playlistData;
+                        activePlaylist = [...rawPlaylist];
+                        activeIndices = rawPlaylist.map((_, i) => i);
+                        initPlayer();
+                    }} else {{
+                        showError("根目錄 playlist.js 內無有效單字資料。");
+                    }}
+                }};
+                document.head.appendChild(script);
+            }}
+        }}
+
+        function showError(msg) {{
+            displayWord.innerText = "⚠️ 載入錯誤";
+            displayMeaning.innerText = msg;
+            displayMeaning.style.color = "#ef4444";
+        }}
+
+        // 初始化播放清單 UI
+        function initPlaylist() {{
+            playlistUi.innerHTML = '';
+            
+            // 防呆設定跳轉範圍
+            jumpInput.max = rawPlaylist.length;
+            jumpInput.placeholder = `1-${{rawPlaylist.length}}`;
+
+            if (activePlaylist.length === 0) {{
+                playlistUi.innerHTML = `
+                    <div class="empty-search">
+                        <i class="fa-solid fa-folder-open"></i>
+                        沒有找到任何符合的單字
+                    </div>
+                `;
+                return;
+            }}
+
+            activePlaylist.forEach((item, index) => {{
+                // 取得其在原始陣列中的索引
+                const originalIndex = activeIndices[index];
+                const li = document.createElement('li');
+                li.id = 'track-' + originalIndex;
+                li.onclick = () => loadTrack(originalIndex);
+                
+                li.innerHTML = `
+                    <span class="track-num">${{originalIndex + 1}}</span>
+                    <div class="track-content">
+                        <span class="track-word">${{item.word}}</span>
+                        <span class="track-meaning">${{item.meaning}}</span>
+                    </div>
+                `;
+                playlistUi.appendChild(li);
+            }});
+            
+            // 重新為當前歌曲標記高亮樣式
+            highlightActiveTrack();
+        }}
+
+        // 搜尋篩選過濾邏輯
+        function filterPlaylist() {{
+            const query = searchInput.value.toLowerCase().trim();
+            
+            if (!query) {{
+                activePlaylist = [...rawPlaylist];
+                activeIndices = rawPlaylist.map((_, i) => i);
+            }} else {{
+                activePlaylist = [];
+                activeIndices = [];
+                rawPlaylist.forEach((item, index) => {{
+                    const wordMatch = item.word.toLowerCase().includes(query);
+                    const meaningMatch = item.meaning.toLowerCase().includes(query);
+                    if (wordMatch || meaningMatch) {{
+                        activePlaylist.push(item);
+                        activeIndices.push(index);
+                    }}
+                }});
+            }}
+            initPlaylist();
+        }}
+        
+        // 標記目前高亮曲目並自動平滑滾動
+        function highlightActiveTrack() {{
+            document.querySelectorAll('.playlist li').forEach(el => el.classList.remove('active'));
+            const activeItem = document.getElementById('track-' + currentIndex);
+            
+            if (activeItem) {{
+                activeItem.classList.add('active');
+                
+                // 平滑滾動讓當前音軌保持在畫面的 1/4 處，方便對照閱讀
+                const elementRect = activeItem.getBoundingClientRect();
+                const absoluteElementTop = elementRect.top + window.pageYOffset;
+                const targetScrollTop = absoluteElementTop - (window.innerHeight * 0.45);
+
+                window.scrollTo({{
+                    top: targetScrollTop,
+                    behavior: 'smooth'
+                }});
+            }}
+        }}
+        
+        // 清理目前所有間隔狀態
+        function clearGapState() {{
+            if (gapTimer) {{ 
+                clearTimeout(gapTimer); 
+                gapTimer = null; 
+            }}
+            if (restIntervalId) {{
+                clearInterval(restIntervalId);
+                restIntervalId = null;
+            }}
+            isGapPaused = false;
+            gapRemaining = 0;
+            appBody.classList.remove('resting-state');
+        }}
+
+        // 載入特定索引的音軌
+        function loadTrack(index) {{
+            clearGapState();
+            if (index < 0 || index >= rawPlaylist.length) return;
+            
+            currentIndex = index;
+            const item = rawPlaylist[currentIndex];
+
+            audio.src = item.file;
+            displayWord.innerText = item.word;
+            displayMeaning.innerText = item.meaning;
+            displaySentence.innerText = item.sentence || ""; 
+            displaySentenceTrans.innerText = item.sentence_trans || "";
+
+            highlightActiveTrack();
+            
+            audio.play().catch(e => {{}});
+        }}
+
+        // 播放與暫停切換主核心
+        function togglePlay() {{
+            if (gapTimer) {{
+                pauseGap();
+            }} else if (isGapPaused) {{
+                resumeGap();
+            }} else {{
+                audio.paused ? audio.play() : audio.pause();
+            }}
+        }}
+
+        audio.onplay = () => {{
+            clearGapState();
+            playPauseBtn.innerHTML = '<i class="fa-solid fa-pause"></i> 暫停';
+        }};
+        
+        audio.onpause = () => {{
+            if (!isGapPaused) {{
+                playPauseBtn.innerHTML = '<i class="fa-solid fa-play"></i> 播放';
+            }}
+        }};
+        
+        // 啟動單字間的休息時間倒數
+        function startGap(seconds) {{
+            clearGapState(); 
+            gapRemaining = seconds * 1000;
+            appBody.classList.add('resting-state');
+            resumeGap();
+        }}
+        
+        // 恢復倒數
+        function resumeGap() {{
+            isGapPaused = false;
+            gapStartTime = Date.now();
+            appBody.classList.add('resting-state');
+            
+            // 啟用秒數視覺倒數更新器
+            updateRestBtnText();
+            restIntervalId = setInterval(updateRestBtnText, 100);
+            
+            gapTimer = setTimeout(() => {{
+                clearGapState();
+                playNext();
+            }}, gapRemaining);
+        }}
+        
+        // 暫停倒數
+        function pauseGap() {{
+            if (!gapTimer) return;
+            isGapPaused = true;
+            clearTimeout(gapTimer);
+            gapTimer = null;
+            if (restIntervalId) {{
+                clearInterval(restIntervalId);
+                restIntervalId = null;
+            }}
+            const elapsed = Date.now() - gapStartTime;
+            gapRemaining -= elapsed;
+            playPauseBtn.innerHTML = `<i class="fa-solid fa-forward-step"></i> 繼續 (${{(gapRemaining / 1000).toFixed(1)}}s)`;
+        }}
+
+        // 更新間隔倒數時的按鈕文字
+        function updateRestBtnText() {{
+            const elapsed = Date.now() - gapStartTime;
+            const currentLeft = Math.max(0, gapRemaining - elapsed);
+            playPauseBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> 休息 (${{(currentLeft / 1000).toFixed(1)}}s)`;
+        }}
+
+        // 精準跳转至指定單字編號
+        function jumpToTrack() {{
+            const val = parseInt(jumpInput.value);
+            if (!val || val < 1 || val > rawPlaylist.length) {{
+                alert("請輸入 1 到 " + rawPlaylist.length + " 之間的正確單字編號");
+                return;
+            }}
+            loadTrack(val - 1);
+            jumpInput.value = '';
+        }}
+
+        jumpInput.addEventListener("keydown", (e) => {{
+            if (e.key === "Enter") jumpToTrack();
+        }});
+
+        // 播放下一首
+        function playNext(force = false) {{
+            if (force) clearGapState();
+
+            if (currentIndex < rawPlaylist.length - 1) {{
+                loadTrack(currentIndex + 1);
+            }} else {{
+                clearGapState();
+                displayWord.innerText = "🎉 恭喜完成！";
+                displayMeaning.innerText = "所有單字皆已播放完畢";
+                displaySentence.innerText = "";
+                displaySentenceTrans.innerText = "";
+                playPauseBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> 重頭播放';
+                playPauseBtn.onclick = () => {{
+                    playPauseBtn.onclick = togglePlay;
+                    loadTrack(0);
+                }};
+            }}
+        }}
+        
+        // 播放上一首
+        function playPrev() {{
+            if (currentIndex > 0) {{
+                loadTrack(currentIndex - 1);
+            }}
+        }}
+
+        // 單曲播放結束，觸發間隔休息或直接播放下一曲
+        audio.addEventListener('ended', () => {{
+            const delayVal = parseFloat(delayInput.value) || 0;
+            if (delayVal <= 0) {{
+                playNext();
+            }} else {{
+                startGap(delayVal);
+            }}
+        }});
+
+        // 全域鍵盤快捷鍵綁定
+        document.addEventListener('keydown', (e) => {{
+            // 若游標位於輸入框內則不觸發快捷鍵，避免打字干擾
+            if (document.activeElement.tagName === "INPUT") return;
+
+            if (e.code === "Space") {{
+                e.preventDefault();
+                togglePlay();
+            }} else if (e.code === "ArrowLeft") {{
+                playPrev();
+            }} else if (e.code === "ArrowRight") {{
+                playNext(true);
+            }}
+        }});
+
+        // 載入第一首曲目（但不自動播放，符合現代瀏覽器限制與使用者習慣）
+        function initPlayer() {{
+            initPlaylist();
+            if (rawPlaylist.length > 0) {{
+                const first = rawPlaylist[0];
+                audio.src = first.file;
+                displayWord.innerText = first.word;
+                displayMeaning.innerText = first.meaning;
+                displaySentence.innerText = first.sentence || "";
+                displaySentenceTrans.innerText = first.sentence_trans || "";
+                highlightActiveTrack();
+            }}
+        }}
+
+        // 啟動加載程序
+        loadDataAndInit();
+    </script>
+</body>
+</html>
+"""
+
+    with open(HTML_FILE, "w", encoding="utf-8") as html_f:
+        html_f.write(html_content)
+    print(f"✅ 網頁引擎生成完成！已產出: {HTML_FILE}")
+    print("🚀 引擎與資料解耦重構完成！雙擊 player.html 即可在本地端執行。")
+
+if __name__ == "__main__":
+    generate_player()
