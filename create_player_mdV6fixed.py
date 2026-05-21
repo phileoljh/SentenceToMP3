@@ -21,19 +21,21 @@ def parse_md_file(filepath):
 
     with open(filepath, "r", encoding="utf-8") as f:
         for line in f:
-            line = line.strip()
+            line_strip = line.strip()
             
-            if not line.startswith("|"):
+            if not line_strip.startswith("|"):
                 continue
             
-            # 過濾表頭關鍵字 (包含 4 欄與 5 欄格式)
-            header_keywords = ["English", "(序號)", "序號", "英文片語", "---"]
-            if any(kw in line for kw in header_keywords): continue
+            # 排除分隔線
+            if "---" in line_strip:
+                continue
 
-            parts = [p.strip() for p in line.split('|')]
+            parts = [p.strip() for p in line_strip.split('|')]
             # 去除 split 產生的頭尾空元素
-            if parts[0] == "": parts.pop(0)
-            if parts and parts[-1] == "": parts.pop()
+            if parts[0] == "": 
+                parts.pop(0)
+            if parts and parts[-1] == "": 
+                parts.pop()
 
             if len(parts) >= 5:
                 # 5 欄位格式: | 序號 | 英文 | 中文 | 例句 | 中文例句 |
@@ -51,6 +53,14 @@ def parse_md_file(filepath):
                 continue
 
             clean_word = re.sub(r'^\d+\.\s*', '', raw_word)
+            if not clean_word:
+                continue
+
+            # 精確比對表頭欄位內容，避免誤殺一般行 (如 be proficient in)
+            header_vals = ["(序號) English", "English", "序號", "英文片語", "英文", "word", "序號 English"]
+            if clean_word in header_vals:
+                continue
+
             word_data.append({
                 "word": clean_word,
                 "meaning": meaning,
@@ -60,40 +70,34 @@ def parse_md_file(filepath):
     return word_data
 
 def generate_html():
-    if not os.path.exists(MP3_DIR):
-        print(f"❌ 找不到 {MP3_DIR} 資料夾")
-        return
-
-    mp3_files = [f for f in os.listdir(MP3_DIR) if f.lower().endswith('.mp3')]
-    mp3_files.sort() 
-
-    if not mp3_files:
-        print("⚠️ 資料夾內沒有 MP3 檔案")
-        return
-
+    # 解析單字清單資料 (Source of Truth)
     text_data = parse_md_file(INPUT_FILE)
+    
+    if not text_data:
+        print("⚠️ 警告：沒有偵測到任何有效的單字資料。")
+        return
+
     playlist = []
     
     import urllib.parse
 
-    for i, filename in enumerate(mp3_files):
+    for i, item in enumerate(text_data):
+        index = i + 1
+        # 清理英文單字取得合法檔名
+        safe_filename_text = re.sub(r'[\\/*?:"<>|]', "", item["word"])
+        filename = f"{index:04d}_{safe_filename_text}.mp3"
+        
         # 使用 urllib.parse.quote 進行 URL 編碼，解決特殊字元 (如 %, 空白) 導致網頁無法播放的問題
         encoded_filename = urllib.parse.quote(filename)
-        item = {
-            "file": f"{MP3_DIR}/{encoded_filename}",
-            "word": filename.replace(".mp3", ""),
-            "meaning": "",
-            "sentence": "",
-            "sentence_trans": ""
-        }
         
-        if i < len(text_data):
-            item["word"] = text_data[i]["word"]
-            item["meaning"] = text_data[i]["meaning"]
-            item["sentence"] = text_data[i]["sentence"]
-            item["sentence_trans"] = text_data[i]["sentence_trans"]
-            
-        playlist.append(item)
+        playlist_item = {
+            "file": f"{MP3_DIR}/{encoded_filename}",
+            "word": item["word"],
+            "meaning": item["meaning"],
+            "sentence": item["sentence"],
+            "sentence_trans": item["sentence_trans"]
+        }
+        playlist.append(playlist_item)
 
     js_playlist = json.dumps(playlist, ensure_ascii=False)
 

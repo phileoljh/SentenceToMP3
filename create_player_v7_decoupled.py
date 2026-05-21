@@ -24,19 +24,18 @@ def parse_md_file(filepath):
 
     with open(filepath, "r", encoding="utf-8") as f:
         for line in f:
-            line = line.strip()
+            line_strip = line.strip()
             
             # 僅處理表格行
-            if not line.startswith("|"):
+            if not line_strip.startswith("|"):
                 continue
             
-            # 過濾無效表頭與分隔線
-            header_keywords = ["English", "(序號)", "序號", "英文片語", "---"]
-            if any(kw in line for kw in header_keywords): 
+            # 排除分隔線
+            if "---" in line_strip:
                 continue
 
             # 使用管線符號分割欄位
-            parts = [p.strip() for p in line.split('|')]
+            parts = [p.strip() for p in line_strip.split('|')]
             # 去除 split 產生的頭尾空元素 (若表格開頭結尾都有 |)
             if parts[0] == "": 
                 parts.pop(0)
@@ -61,6 +60,14 @@ def parse_md_file(filepath):
 
             # 清理單字開頭的數字序號 (如 "1. apple" 轉為 "apple")
             clean_word = re.sub(r'^\d+\.\s*', '', raw_word)
+            if not clean_word:
+                continue
+
+            # 精確比對表頭欄位內容，避免誤殺一般行 (如 be proficient in)
+            header_vals = ["(序號) English", "English", "序號", "英文片語", "英文", "word", "序號 English"]
+            if clean_word in header_vals:
+                continue
+
             word_data.append({
                 "word": clean_word,
                 "meaning": meaning,
@@ -72,46 +79,38 @@ def parse_md_file(filepath):
 def generate_player():
     """
     主生成函式：
-    1. 掃描 MP3 檔案並比對 md 檔案資料。
-    2. 生成 playlist.js 資料檔。
-    3. 生成 player_v7_decoupled.html 播放器網頁引擎。
+    1. 解析 md 檔案資料。
+    2. 直接以單字表順序產生播放清單與檔名。
+    3. 生成 playlist.js 資料檔。
+    4. 生成 player_v7_decoupled.html 播放器網頁引擎。
     """
-    if not os.path.exists(MP3_DIR):
-        print(f"❌ 錯誤：找不到 {MP3_DIR} 資料夾")
-        return
-
-    # 讀取並排序所有 MP3 音檔
-    mp3_files = [f for f in os.listdir(MP3_DIR) if f.lower().endswith('.mp3')]
-    mp3_files.sort() 
-
-    if not mp3_files:
-        print("⚠️ 警告：資料夾內沒有偵測到任何 MP3 檔案")
-        return
-
-    # 解析單字清單資料
+    # 解析單字清單資料 (Source of Truth)
     text_data = parse_md_file(INPUT_FILE)
+    
+    if not text_data:
+        print("⚠️ 警告：沒有偵測到任何有效的單字資料。")
+        return
+
     playlist = []
     
     # 建立播放清單結構
-    for i, filename in enumerate(mp3_files):
+    for i, item in enumerate(text_data):
+        index = i + 1
+        # 清理英文單字取得合法檔名
+        safe_filename_text = re.sub(r'[\\/*?:"<>|]', "", item["word"])
+        filename = f"{index:04d}_{safe_filename_text}.mp3"
+        
         # 進行 URL 編碼以解決特殊字元 (如空白、百分比) 在網頁載入時的 CORS 或解析失敗問題
         encoded_filename = urllib.parse.quote(filename)
-        item = {
-            "file": f"{MP3_DIR}/{encoded_filename}",
-            "word": filename.replace(".mp3", ""),
-            "meaning": "",
-            "sentence": "",
-            "sentence_trans": ""
-        }
         
-        # 若 md 資料項數足夠，則將單字、釋義、例句與中譯進行填充
-        if i < len(text_data):
-            item["word"] = text_data[i]["word"]
-            item["meaning"] = text_data[i]["meaning"]
-            item["sentence"] = text_data[i]["sentence"]
-            item["sentence_trans"] = text_data[i]["sentence_trans"]
-            
-        playlist.append(item)
+        playlist_item = {
+            "file": f"{MP3_DIR}/{encoded_filename}",
+            "word": item["word"],
+            "meaning": item["meaning"],
+            "sentence": item["sentence"],
+            "sentence_trans": item["sentence_trans"]
+        }
+        playlist.append(playlist_item)
 
     # 1. 寫入解耦後的 playlist.js 檔案
     # 透過 window.playlistData 宣告，讓本地端 (file://) 可以無障礙載入，避開 CORS 同源政策限制

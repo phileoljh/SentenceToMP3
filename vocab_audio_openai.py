@@ -68,48 +68,17 @@ def clean_text_for_tts(text):
     
     return cleaned
 
-async def process_line(index, line, client, semaphore):
-    """處理單一行 Markdown 表格資料"""
+async def process_item(item, client, semaphore):
+    """
+    處理單一單字項目的非同步下載 (OpenAI 版本)。
+    """
     async with semaphore:
-        # 1. 預處理：去除前後空白
-        line = line.strip()
-        
-        # 2. 過濾無效行
-        if not line.startswith("|"): return
-        if "English" in line and "中文" in line: return
-        if "---" in line: return
+        filepath = item["filepath"]
+        index = item["index"]
+        en_word = item["word"]
+        zh_def = item["meaning"]
+        en_sentence = item["sentence"]
 
-        # 3. 解析表格欄位
-        parts = [p.strip() for p in line.split('|')]
-        # 去除 split 產生的頭尾空元素
-        if parts[0] == "": parts.pop(0)
-        if parts and parts[-1] == "": parts.pop()
-
-        # 4. 偵測與提取資料 (自動相容 4 或 5 欄位)
-        if len(parts) >= 5:
-            # 5 欄位格式: | 序號 | 英文 | 中文 | 例句 | 中文例句 |
-            raw_word_col = parts[1]
-            zh_def = parts[2]
-            en_sentence = parts[3]
-        elif len(parts) >= 2:
-            # 4 欄位格式: | (序號) 英文 | 中文 | 例句 | 中譯 |
-            raw_word_col = parts[0]
-            zh_def = parts[1]
-            en_sentence = parts[2] if len(parts) >= 3 else ""
-        else:
-            return
-
-        # 5. 清理單字
-        en_word = re.sub(r'^\d+\.\s*', '', raw_word_col)
-
-        if not en_word: return
-
-        # 6. 決定檔名
-        safe_filename_text = re.sub(r'[\\/*?:"<>|]', "", en_word)
-        filename = f"{index:04d}_{safe_filename_text}.mp3"
-        filepath = os.path.join(OUTPUT_DIR, filename)
-
-        # 檢查是否已存在 (跳過邏輯)
         if os.path.exists(filepath):
             print(f"⏩ 跳過已存在 [{index:04d}]: {en_word}")
             return
@@ -119,30 +88,30 @@ async def process_line(index, line, client, semaphore):
         # 7. 依據模式生成語音片段
         audio_segments = []
         
-        # 片段 A: 單字
-        seg_a = await get_audio_bytes(client, clean_text_for_tts(en_word), VOICE_EN_WORD)
-        if not seg_a:
+        # 片段 A: 單字 (核心片段)
+        seg_word = await get_audio_bytes(client, clean_text_for_tts(en_word), VOICE_EN_WORD)
+        if not seg_word:
             print(f"⚠️ 跳過處理 [{index:04d}]: 單字音軌生成失敗 ({en_word})")
             return
-        audio_segments.append(seg_a)
+        audio_segments.append(seg_word)
         
         # 片段 B: 中文釋義
         if zh_def:
-            seg_b = await get_audio_bytes(client, clean_text_for_tts(zh_def), VOICE_ZH)
-            if not seg_b:
+            seg_zh = await get_audio_bytes(client, clean_text_for_tts(zh_def), VOICE_ZH)
+            if not seg_zh:
                 print(f"⚠️ 跳過處理 [{index:04d}]: 中文釋義音軌生成失敗 ({en_word})")
                 return
-            audio_segments.append(seg_b)
+            audio_segments.append(seg_zh)
 
-        # 片段 C: 英文例句
-        if AUDIO_MODE == 2 and en_sentence:
-            seg_c = await get_audio_bytes(client, clean_text_for_tts(en_sentence), VOICE_EN_SENT)
-            if not seg_c:
+        # 片段 C: 英文例句 (僅模式 2 且有例句時)
+        if AUDIO_MODE == 2 and en_sentence and en_sentence != "":
+            seg_sent = await get_audio_bytes(client, clean_text_for_tts(en_sentence), VOICE_EN_SENT)
+            if not seg_sent:
                 print(f"⚠️ 跳過處理 [{index:04d}]: 例句音軌生成失敗 ({en_word})")
                 return
-            audio_segments.append(seg_c)
+            audio_segments.append(seg_sent)
 
-        # 8. 寫入檔案
+        # 8. 寫入檔案 (合併所有片段)
         total_audio = b"".join(audio_segments)
         try:
             with open(filepath, "wb") as out_f:
@@ -183,33 +152,142 @@ async def main():
         print(f"❌ 找不到 {INPUT_FILE}，請確認檔案名稱是否正確。")
         return
 
-    print(f"正在讀取 {INPUT_FILE} ...")
+    print(f"正在讀取與解析 {INPUT_FILE} ...")
     with open(INPUT_FILE, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
-    # 初始化 OpenAI Client (使用 context manager 確保關閉)
+    # 1. 預先解析所有有效的資料行，排除表頭
+    parsed_items = []
+    valid_count = 0
+    
+    for line in lines:
+        line_strip = line.strip()
+        # 僅處理 Markdown 表格資料行
+        if not line_strip.startswith("|"):
+            continue
+        # 排除分隔線
+        if "---" in line_strip:
+            continue
+            
+        parts = [p.strip() for p in line_strip.split('|')]
+        # 去除 split 產生的頭尾空元素 (若表格開頭結尾都有 |)
+        if parts[0] == "":
+            parts.pop(0)
+        if parts and parts[-1] == "":
+            parts.pop()
+            
+        # 偵測並相容 4 欄或 5 欄格式
+        if len(parts) >= 5:
+            # 5 欄位格式: | 序號 | 英文 | 中文 | 例句 | 中文例句 |
+            raw_word_col = parts[1]
+            zh_def = parts[2]
+            en_sentence = parts[3]
+        elif len(parts) >= 2:
+            # 4 欄位格式: | (序號) 英文 | 中文 | 例句 | 中譯 |
+            raw_word_col = parts[0]
+            zh_def = parts[1]
+            en_sentence = parts[2] if len(parts) >= 3 else ""
+        else:
+            continue
+            
+        # 清理單字開頭的數字序號
+        en_word = re.sub(r'^\d+\.\s*', '', raw_word_col)
+        if not en_word:
+            continue
+            
+        # 表頭關鍵字精確比對，避免誤殺例句中包含 English 的一般資料行 (如 be proficient in)
+        header_vals = ["(序號) English", "English", "序號", "英文片語", "英文", "word", "序號 English"]
+        if en_word in header_vals:
+            continue
+            
+        valid_count += 1
+        safe_filename_text = re.sub(r'[\\/*?:"<>|]', "", en_word)
+        filename = f"{valid_count:04d}_{safe_filename_text}.mp3"
+        filepath = os.path.join(OUTPUT_DIR, filename)
+        
+        parsed_items.append({
+            "index": valid_count,
+            "word": en_word,
+            "meaning": zh_def,
+            "sentence": en_sentence,
+            "filename": filename,
+            "filepath": filepath,
+            "safe_word": safe_filename_text
+        })
+
+    if not parsed_items:
+        print("沒有偵測到有效的表格資料。")
+        return
+
+    # 2. 進行本機同步重命名優化 (快取比對)
+    # 比對邏輯：如果某單字預期的 filepath 不存在，則在本機掃描是否有其他序號的同名音檔 (後綴一致)。
+    # 如果有，則直接 rename 為當前序號檔名，瞬間完成而無須重新下載。
+    print("🔍 啟動本機快取比對與重命名優化...")
+    existing_files = [f for f in os.listdir(OUTPUT_DIR) if f.lower().endswith('.mp3')]
+    claimed_physical_files = set()
+    
+    # 第一輪：先把完全符合目前預期檔名的實體檔案標記為 claimed，避免其被誤做改名來源
+    for item in parsed_items:
+        if os.path.exists(item["filepath"]):
+            claimed_physical_files.add(item["filename"])
+            
+    # 第二輪：對於需要但不存在的檔名，嘗試尋找其他序號的同名檔案來重命名
+    renamed_count = 0
+    for item in parsed_items:
+        if item["filename"] in claimed_physical_files:
+            continue
+            
+        # 尋找後綴相同且尚未被認領的實體檔案
+        target_suffix = f"_{item['safe_word']}.mp3"
+        for f in existing_files:
+            if f.endswith(target_suffix) and f not in claimed_physical_files:
+                old_path = os.path.join(OUTPUT_DIR, f)
+                try:
+                    os.rename(old_path, item["filepath"])
+                    print(f"🔄 偵測到序號變更，已重新命名本機音檔：{f} -> {item['filename']} (免下載)")
+                    claimed_physical_files.add(item["filename"])
+                    renamed_count += 1
+                    break
+                except Exception as e:
+                    print(f"⚠️ 重新命名失敗 {f}: {e}")
+                    
+    if renamed_count > 0:
+        print(f"✨ 重命名優化完成！共快速移位了 {renamed_count} 個本機音檔。")
+
+    # 3. 初始化 OpenAI Client 並執行並行下載任務，只下載真正缺失的音檔
     async with AsyncOpenAI(api_key=api_key) as client:
         # 限制並發數 (OpenAI 有 Rate Limit，建議不要設太高)
         semaphore = asyncio.Semaphore(3)
         tasks = []
-        
-        valid_count = 0
-        for line in lines:
-            if not line.strip().startswith("|"): continue
-            # 過濾表頭關鍵字
-            header_keywords = ["English", "(序號)", "序號", "英文片語", "---"]
-            if any(kw in line for kw in header_keywords): continue
-            
-            valid_count += 1
-            task = process_line(valid_count, line, client, semaphore)
+        for item in parsed_items:
+            task = process_item(item, client, semaphore)
             tasks.append(task)
 
         if tasks:
-            print(f"開始處理 {len(tasks)} 筆資料 (OpenAI Mode) ...")
+            print(f"開始處理 {len(tasks)} 筆資料 (OpenAI 模式) ...")
             await asyncio.gather(*tasks)
-            print(f"\n✅ 全部完成！檔案已儲存於 {OUTPUT_DIR} 資料夾。")
+            print(f"\n✅ 下載與同步完成！")
         else:
             print("沒有偵測到有效的表格資料。")
+            return
+
+    # 4. 清理未在預期清單中的舊垃圾/錯序號檔案
+    expected_filenames = {item["filename"] for item in parsed_items}
+    cleaned_count = 0
+    for existing_file in os.listdir(OUTPUT_DIR):
+        if existing_file.lower().endswith('.mp3'):
+            if existing_file not in expected_filenames:
+                garbage_path = os.path.join(OUTPUT_DIR, existing_file)
+                try:
+                    os.remove(garbage_path)
+                    cleaned_count += 1
+                except Exception as e:
+                    print(f"⚠️ 無法刪除垃圾檔案 {existing_file}: {e}")
+                    
+    if cleaned_count > 0:
+        print(f"🧹 已自動清理 {cleaned_count} 個舊的/順序對不上的垃圾音檔！")
+        
+    print(f"🎉 全部完成！檔案已完美儲存於 {OUTPUT_DIR} 資料夾。")
 
 if __name__ == "__main__":
     # Windows 平台 asyncio bug 修正
