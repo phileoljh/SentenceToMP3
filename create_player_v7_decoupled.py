@@ -278,90 +278,51 @@ def generate_player():
             opacity: 0.9;
         }}
 
-        /* 控制按鈕組 */
-        .btn-group {{
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 15px;
-        }}
-
-        button.player-btn {{
-            width: 44px;
-            height: 44px;
-            border: 1px solid var(--border-color);
-            background: rgba(255, 255, 255, 0.03);
-            border-radius: 50%;
-            cursor: pointer;
-            font-size: 1.1rem;
-            color: var(--text-main);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: var(--transition);
-        }}
-
-        button.player-btn:hover {{
-            background: rgba(255, 255, 255, 0.1);
-            border-color: var(--text-dim);
-            transform: scale(1.05);
-        }}
-
-        button.player-btn:active {{
-            transform: scale(0.95);
-        }}
-
-        #playPauseBtn {{
-            width: 110px;
-            border-radius: var(--btn-radius);
-            background: var(--primary-color);
-            font-weight: 700;
-            font-size: 0.95rem;
-            color: white;
-            border: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            box-shadow: 0 4px 14px var(--primary-glow);
-        }}
-
-        #playPauseBtn:hover {{
-            background: #4f46e5;
-            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.45);
-        }}
-
-        /* 間隔與搜尋控制台 */
+        /* 左右中三欄單一橫列整合控制面板：極致節省垂直空間 */
         .controls-panel {{
-            display: grid;
-            grid-template-columns: 1fr 0.9fr 1.3fr;
-            gap: 8px;
+            position: relative; /* 為中間絕對居中提供定位基準 */
+            display: flex;
+            justify-content: space-between;
+            align-items: center; /* 讓左、中、右三側完美垂直置中對齊 */
+            gap: 10px;
             background: rgba(255, 255, 255, 0.02);
             border: 1px solid rgba(255, 255, 255, 0.03);
-            padding: 10px;
-            border-radius: 12px;
+            padding: 8px 12px; /* 緊湊的上下 padding */
+            border-radius: 14px;
+            min-height: 54px; /* 固定最小高度，確保絕對定位時高度不塌陷 */
+        }}
+
+        /* 左側設定區：間隔與重複一上一下堆疊 */
+        .left-settings {{
+            display: flex;
+            flex-direction: column;
+            gap: 4px; /* 緊湊的垂直間距 */
+            flex-shrink: 0;
+            z-index: 1; /* 保證層級正確 */
         }}
 
         .control-item {{
             display: flex;
             align-items: center;
-            gap: 8px;
-            font-size: 0.85rem;
+            gap: 6px;
+            font-size: 0.8rem;
             color: var(--text-dim);
         }}
 
         .control-item label {{
             white-space: nowrap;
+            width: 48px; /* 擴寬至 48px，提供舒適間隔防止文字頂到數字 */
+            display: inline-block;
         }}
 
         .control-item input {{
             background: rgba(15, 23, 42, 0.6);
             border: 1px solid var(--border-color);
             color: #fff;
-            padding: 6px 8px;
+            padding: 4px 8px; /* 稍微增加 padding */
             border-radius: 6px;
             width: 100%;
+            max-width: 80px; /* 大幅加寬至 80px，預留三位數與上下按鈕並存空間 */
             font-size: 0.85rem;
             outline: none;
             transition: var(--transition);
@@ -369,7 +330,112 @@ def generate_player():
 
         .control-item input:focus {{
             border-color: var(--primary-color);
-            box-shadow: 0 0 8px var(--primary-glow);
+            box-shadow: 0 0 6px var(--primary-glow);
+        }}
+
+        /* 中間播控按鈕區 - 絕對居中法，保證 100% 精準位於播放器中軸 */
+        .center-controls {{
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-shrink: 0;
+            z-index: 2; /* 確保點擊層級最高 */
+        }}
+
+        /* 縮小版上一首/下一首圓形按鈕 */
+        button.player-btn.small-btn {{
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }}
+
+        button.player-btn.small-btn:hover {{
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--text-dim);
+            transform: scale(1.05);
+        }}
+
+        /* 縮小版播放/暫停按鈕 */
+        #playPauseBtn.main-play-btn {{
+            width: 85px;
+            height: 36px;
+            border-radius: var(--btn-radius);
+            background: var(--primary-color);
+            font-weight: 700;
+            font-size: 0.85rem;
+            color: white;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            box-shadow: 0 4px 12px var(--primary-glow);
+            transition: var(--transition);
+        }}
+
+        #playPauseBtn.main-play-btn:hover {{
+            background: #4f46e5;
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.45);
+        }}
+
+        /* 右側設定區：跳轉區 */
+        .right-settings {{
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            flex-shrink: 0;
+            z-index: 1; /* 保持層級正確 */
+        }}
+
+        .right-settings label {{
+            white-space: nowrap;
+        }}
+
+        .right-settings input {{
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border-color);
+            color: #fff;
+            padding: 5px 8px;
+            border-radius: 6px;
+            outline: none;
+            transition: var(--transition);
+        }}
+
+        .right-settings input:focus {{
+            border-color: var(--primary-color);
+            box-shadow: 0 0 6px var(--primary-glow);
+        }}
+
+        .jump-btn {{
+            padding: 5px 10px;
+            background: var(--primary-color);
+            border: none;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            white-space: nowrap;
+            transition: var(--transition);
+        }}
+
+        .jump-btn:hover {{
+            background: #4f46e5;
         }}
 
         /* 即時搜尋框樣式 */
@@ -532,27 +598,51 @@ def generate_player():
             <!-- HTML5 音源器 -->
             <audio id="audioPlayer" controls></audio>
             
-            <!-- 播控按鈕區 -->
-            <div class="btn-group">
-                <button class="player-btn" onclick="playPrev()" title="上一首"><i class="fa-solid fa-backward-step"></i></button>
-                <button class="player-btn" id="playPauseBtn" onclick="togglePlay()"><i class="fa-solid fa-play"></i> 播放</button>
-                <button class="player-btn" onclick="playNext(true)" title="下一首"><i class="fa-solid fa-forward-step"></i></button>
-            </div>
-
-            <!-- 控制台面版 -->
+            <!-- 
+              【繁體中文註解 - 單列儀表板極致空間壓縮說明】
+              此處將「播控按鈕」與「參數設定」融合為單一橫列 Flex 儀表板，節省 60% 垂直空間：
+              - 左側 (left-settings)：間隔與重複一上一下堆疊，寬度經 80px 拓寬優化。
+              - 中間 (center-controls)：上一首、播放/暫停、下一首水平排列，使用緊湊按鈕尺寸。
+              - 右側 (right-settings)：跳至與跳轉水平排列，輸入框最大寬度統一為 80px。
+              三者於同一 Flex 基準線上垂直居中對齊，完美兼顧操作熱區與介面精美度。請勿隨意拆分。
+            -->
+            <!-- 整合式控制儀表板 -->
             <div class="controls-panel">
-                <div class="control-item">
-                    <label><i class="fa-solid fa-hourglass-half"></i> 間隔(秒)</label>
-                    <input type="number" id="delayInput" value="1.0" min="0" step="0.5" style="max-width: 60px;">
+                <!-- 左側：間隔與重複一上一下堆疊 -->
+                <div class="left-settings">
+                    <div class="control-item">
+                        <label><i class="fa-solid fa-hourglass-half"></i> 間隔</label>
+                        <!-- 
+                          【繁體中文註解 - 寬度設計說明】
+                          此處 max-width 設為 80px，用以預留「三位數（如 10.5）」與「瀏覽器原生上下微調按鈕」並存空間，
+                          防止微調按鈕浮現時遮擋數字，請勿改窄。
+                        -->
+                        <input type="number" id="delayInput" value="1.0" min="0" step="0.5" style="max-width: 80px;">
+                    </div>
+                    <div class="control-item">
+                        <label><i class="fa-solid fa-rotate"></i> 重複</label>
+                        <!-- 
+                          【繁體中文註解 - 寬度設計說明】
+                          此處 max-width 設為 80px，用以預留「三位數（如 999）」與「瀏覽器原生上下微調按鈕」並存空間，
+                          防止微調按鈕浮現時遮擋數字，請勿改窄。
+                        -->
+                        <input type="number" id="repeatInput" value="1" min="1" step="1" style="max-width: 80px;">
+                    </div>
                 </div>
-                <div class="control-item">
-                    <label><i class="fa-solid fa-rotate"></i> 重複</label>
-                    <input type="number" id="repeatInput" value="1" min="1" step="1" style="max-width: 50px;">
+
+                <!-- 中間：播控按鈕區 (水平置中) -->
+                <div class="center-controls">
+                    <button class="player-btn small-btn" onclick="playPrev()" title="上一首"><i class="fa-solid fa-backward-step"></i></button>
+                    <button class="player-btn main-play-btn" id="playPauseBtn" onclick="togglePlay()"><i class="fa-solid fa-play"></i> 播放</button>
+                    <button class="player-btn small-btn" onclick="playNext(true)" title="下一首"><i class="fa-solid fa-forward-step"></i></button>
                 </div>
-                <div class="control-item" style="justify-content: flex-end; width: 100%; gap: 6px;">
+
+                <!-- 右側：跳轉區 (水平排列) -->
+                <div class="right-settings">
                     <label>跳至</label>
-                    <input type="number" id="jumpInput" placeholder="編號" min="1" style="width: 100%; max-width: 65px;">
-                    <button onclick="jumpToTrack()" style="padding: 6px 10px; background: var(--primary-color); border: none; color: white; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; white-space: nowrap; transition: var(--transition);">跳轉</button>
+                    <!-- 跳轉框同步加寬至 80px，達成完全的對稱美學 -->
+                    <input type="number" id="jumpInput" placeholder="編號" min="1" style="width: 100%; max-width: 80px;">
+                    <button onclick="jumpToTrack()" class="jump-btn">跳轉</button>
                 </div>
             </div>
 
