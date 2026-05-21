@@ -125,7 +125,7 @@ def generate_player():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>單字聽力訓練 V7 (毛玻璃解耦版)</title>
+    <title>單字聽力訓練(毛玻璃解耦版)</title>
     <!-- 載入 Google Fonts 設計字體與 Font Awesome 6 圖示 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -231,9 +231,10 @@ def generate_player():
         }}
 
         #current-word {{
-            font-family: 'Outfit', sans-serif;
+            /* 將字型由 Outfit 改為 Inter 並調降字體粗細至 700 (Bold)，優化小寫 t 的可讀性 (帶有向右彎曲尾巴) 避免其形似十字架 */
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
             font-size: 1.8rem;
-            font-weight: 800;
+            font-weight: 700;
             color: #fff;
             margin-bottom: 6px;
             letter-spacing: -0.01em;
@@ -515,7 +516,7 @@ def generate_player():
 
     <div class="app-container" id="appBody">
         <div class="player-header">
-            <h2 class="header-title"><i class="fa-solid fa-graduation-cap"></i> 聽力大師 V7 (解耦版)</h2>
+            <h2 class="header-title"><i class="fa-solid fa-graduation-cap"></i> 聽力大師(解耦版)</h2>
             
             <!-- 目前朗讀單字顯示區 -->
             <div id="current-info">
