@@ -183,6 +183,10 @@ def generate_html():
                 <input type="number" id="delayInput" value="1.0" min="0" step="0.5">
             </div>
             <div class="control-item">
+                <label>重複</label>
+                <input type="number" id="repeatInput" value="1" min="1" step="1">
+            </div>
+            <div class="control-item">
                 <label>跳至</label>
                 <input type="number" id="jumpInput" placeholder="No." min="1">
                 <button onclick="jumpToTrack()" style="padding: 4px 10px; background: #ddd; color: #333;">Go</button>
@@ -198,6 +202,7 @@ def generate_html():
         const playlistData = {js_playlist};
 
         let currentIndex = 0;
+        let currentPlayCount = 1;
         let gapTimer = null;
         let gapRemaining = 0;
         let gapStartTime = 0;
@@ -255,16 +260,23 @@ def generate_html():
             displaySentence.innerText = item.sentence || ""; 
             displaySentenceTrans.innerText = item.sentence_trans || "";
 
-            // 清單捲動邏輯 (維持 V6 設定：下方 1/4 處)
+            // 重置重複次數
+            currentPlayCount = 1;
+
+            // 清單捲動邏輯 (優化小螢幕防遮擋自適應定位)
             document.querySelectorAll('.playlist li').forEach(el => el.classList.remove('active'));
             const activeItem = document.getElementById('track-' + currentIndex);
             
             if(activeItem) {{
                 activeItem.classList.add('active');
                 
+                // 平滑滾動讓當前音軌保持在固定 header 下方適當位置，避免被面板遮擋
+                const header = document.querySelector('.player-header');
+                const headerHeight = header ? header.offsetHeight : 280;
+                
                 const elementRect = activeItem.getBoundingClientRect();
                 const absoluteElementTop = elementRect.top + window.pageYOffset;
-                const targetScrollTop = absoluteElementTop - (window.innerHeight * 0.75);
+                const targetScrollTop = absoluteElementTop - headerHeight - 20;
 
                 window.scrollTo({{
                     top: targetScrollTop,
@@ -354,11 +366,18 @@ def generate_html():
         }}
 
         audio.addEventListener('ended', () => {{
-            const delayVal = parseFloat(delayInput.value) || 0;
-            if (delayVal <= 0) {{
-                playNext();
+            const repeatVal = parseInt(document.getElementById('repeatInput').value) || 1;
+            if (currentPlayCount < repeatVal) {{
+                currentPlayCount++;
+                audio.currentTime = 0;
+                audio.play().catch(e => {{}});
             }} else {{
-                startGap(delayVal);
+                const delayVal = parseFloat(delayInput.value) || 0;
+                if (delayVal <= 0) {{
+                    playNext();
+                }} else {{
+                    startGap(delayVal);
+                }}
             }}
         }});
 

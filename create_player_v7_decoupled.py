@@ -335,8 +335,8 @@ def generate_player():
         /* 間隔與搜尋控制台 */
         .controls-panel {{
             display: grid;
-            grid-template-columns: 1fr 1.3fr;
-            gap: 12px;
+            grid-template-columns: 1fr 0.9fr 1.3fr;
+            gap: 8px;
             background: rgba(255, 255, 255, 0.02);
             border: 1px solid rgba(255, 255, 255, 0.03);
             padding: 10px;
@@ -543,12 +543,16 @@ def generate_player():
             <div class="controls-panel">
                 <div class="control-item">
                     <label><i class="fa-solid fa-hourglass-half"></i> 間隔(秒)</label>
-                    <input type="number" id="delayInput" value="1.0" min="0" step="0.5" style="max-width: 80px;">
+                    <input type="number" id="delayInput" value="1.0" min="0" step="0.5" style="max-width: 60px;">
+                </div>
+                <div class="control-item">
+                    <label><i class="fa-solid fa-rotate"></i> 重複</label>
+                    <input type="number" id="repeatInput" value="1" min="1" step="1" style="max-width: 50px;">
                 </div>
                 <div class="control-item" style="justify-content: flex-end; width: 100%; gap: 6px;">
                     <label>跳至</label>
-                    <input type="number" id="jumpInput" placeholder="編號" min="1" style="width: 100%; max-width: 95px;">
-                    <button onclick="jumpToTrack()" style="padding: 6px 12px; background: var(--primary-color); border: none; color: white; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; white-space: nowrap; transition: var(--transition);">跳轉</button>
+                    <input type="number" id="jumpInput" placeholder="編號" min="1" style="width: 100%; max-width: 65px;">
+                    <button onclick="jumpToTrack()" style="padding: 6px 10px; background: var(--primary-color); border: none; color: white; border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; white-space: nowrap; transition: var(--transition);">跳轉</button>
                 </div>
             </div>
 
@@ -573,6 +577,7 @@ def generate_player():
         let activeIndices = [];
 
         let currentIndex = 0;       // 目前播音的原始索引
+        let currentPlayCount = 1;   // 目前單字播放次數計數
         let gapTimer = null;        // 間隔計時器
         let gapRemaining = 0;       // 剩餘間隔毫秒數
         let gapStartTime = 0;       // 間隔開始時間戳記
@@ -713,10 +718,13 @@ def generate_player():
             if (activeItem) {{
                 activeItem.classList.add('active');
                 
-                // 平滑滾動讓當前音軌保持在畫面的 1/4 處，方便對照閱讀
+                // 平滑滾動讓當前音軌保持在固定 header 下方適當位置，避免被毛玻璃面板遮擋
+                const header = document.querySelector('.player-header');
+                const headerHeight = header ? header.offsetHeight : 380;
+                
                 const elementRect = activeItem.getBoundingClientRect();
                 const absoluteElementTop = elementRect.top + window.pageYOffset;
-                const targetScrollTop = absoluteElementTop - (window.innerHeight * 0.45);
+                const targetScrollTop = absoluteElementTop - headerHeight - 20;
 
                 window.scrollTo({{
                     top: targetScrollTop,
@@ -755,6 +763,9 @@ def generate_player():
             displaySentenceTrans.innerText = item.sentence_trans || "";
 
             highlightActiveTrack();
+            
+            // 重置播放次數為第一遍
+            currentPlayCount = 1;
             
             audio.play().catch(e => {{}});
         }}
@@ -869,13 +880,20 @@ def generate_player():
             }}
         }}
 
-        // 單曲播放結束，觸發間隔休息或直接播放下一曲
+        // 單曲播放結束，觸發重複播放或間隔休息
         audio.addEventListener('ended', () => {{
-            const delayVal = parseFloat(delayInput.value) || 0;
-            if (delayVal <= 0) {{
-                playNext();
+            const repeatVal = parseInt(document.getElementById('repeatInput').value) || 1;
+            if (currentPlayCount < repeatVal) {{
+                currentPlayCount++;
+                audio.currentTime = 0;
+                audio.play().catch(e => {{}});
             }} else {{
-                startGap(delayVal);
+                const delayVal = parseFloat(delayInput.value) || 0;
+                if (delayVal <= 0) {{
+                    playNext();
+                }} else {{
+                    startGap(delayVal);
+                }}
             }}
         }});
 
