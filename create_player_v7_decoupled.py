@@ -171,7 +171,7 @@ def generate_player():
 
         .app-container {{
             width: 100%;
-            max-width: 600px;
+            max-width: 680px;
             display: flex;
             flex-direction: column;
             min-height: 100vh;
@@ -370,7 +370,9 @@ def generate_player():
 
         /* 縮小版播放/暫停按鈕 */
         #playPauseBtn.main-play-btn {{
-            width: 85px;
+            min-width: 130px;
+            padding: 0 16px;
+            white-space: nowrap;
             height: 36px;
             border-radius: var(--btn-radius);
             background: var(--primary-color);
@@ -381,7 +383,7 @@ def generate_player():
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 8px;
             box-shadow: 0 4px 12px var(--primary-glow);
             transition: var(--transition);
         }}
