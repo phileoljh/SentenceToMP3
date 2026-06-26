@@ -620,7 +620,7 @@ def generate_player():
                           此處 max-width 設為 80px，用以預留「三位數（如 10.5）」與「瀏覽器原生上下微調按鈕」並存空間，
                           防止微調按鈕浮現時遮擋數字，請勿改窄。
                         -->
-                        <input type="number" id="delayInput" value="1.0" min="0" step="0.5" style="max-width: 80px;">
+                        <input type="number" id="delayInput" value="3.0" min="0" step="0.5" style="max-width: 80px;">
                     </div>
                     <div class="control-item">
                         <label><i class="fa-solid fa-rotate"></i> 重複</label>
@@ -629,7 +629,7 @@ def generate_player():
                           此處 max-width 設為 80px，用以預留「三位數（如 999）」與「瀏覽器原生上下微調按鈕」並存空間，
                           防止微調按鈕浮現時遮擋數字，請勿改窄。
                         -->
-                        <input type="number" id="repeatInput" value="1" min="1" step="1" style="max-width: 80px;">
+                        <input type="number" id="repeatInput" value="2" min="1" step="1" style="max-width: 80px;">
                     </div>
                 </div>
 

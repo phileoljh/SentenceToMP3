@@ -180,11 +180,11 @@ def generate_html():
         <div class="controls-panel">
             <div class="control-item">
                 <label>間隔(秒)</label>
-                <input type="number" id="delayInput" value="1.0" min="0" step="0.5">
+                <input type="number" id="delayInput" value="3.0" min="0" step="0.5">
             </div>
             <div class="control-item">
                 <label>重複</label>
-                <input type="number" id="repeatInput" value="1" min="1" step="1">
+                <input type="number" id="repeatInput" value="2" min="1" step="1">
             </div>
             <div class="control-item">
                 <label>跳至</label>
