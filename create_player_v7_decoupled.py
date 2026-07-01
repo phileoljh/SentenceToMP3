@@ -579,6 +579,127 @@ def generate_player():
             color: rgba(255,255,255,0.15);
             display: block;
         }}
+
+        @media (max-width: 580px) {{
+            /* 縮小頂部 header 的整體內距，為手機版螢幕保留更多直向空間 */
+            .player-header {{
+                padding: 12px;
+            }}
+            .header-title {{
+                font-size: 1.15rem;
+                margin-bottom: 8px;
+            }}
+            #current-info {{
+                min-height: 110px;
+                padding: 10px;
+                margin-bottom: 10px;
+            }}
+            #current-word {{
+                font-size: 1.45rem;
+                margin-bottom: 4px;
+            }}
+            #current-meaning {{
+                font-size: 0.95rem;
+                margin-bottom: 4px;
+            }}
+            .sentence-box {{
+                margin-top: 4px;
+                padding-top: 6px;
+            }}
+            #current-sentence {{
+                font-size: 0.8rem;
+            }}
+            #current-sentence-trans {{
+                font-size: 0.75rem;
+            }}
+            audio {{
+                height: 36px;
+                margin-bottom: 10px;
+            }}
+
+            /* 手機版儀表板改為 Grid 雙排佈局，徹底解決重疊遮擋問題 */
+            .controls-panel {{
+                display: grid;
+                grid-template-areas: 
+                    "center center"
+                    "left right";
+                grid-template-columns: 1fr 1fr;
+                gap: 12px 8px;
+                padding: 10px;
+                min-height: auto;
+            }}
+            .center-controls {{
+                grid-area: center;
+                position: static;
+                transform: none;
+                width: 100%;
+                justify-content: center;
+            }}
+            /* 調整主播放按鈕在窄螢幕下的最小寬度，避免擠壓 */
+            #playPauseBtn.main-play-btn {{
+                min-width: 110px;
+                height: 34px;
+                font-size: 0.8rem;
+            }}
+            button.player-btn.small-btn {{
+                width: 34px;
+                height: 34px;
+                font-size: 0.8rem;
+            }}
+            .left-settings {{
+                grid-area: left;
+                align-items: flex-start;
+                justify-content: center;
+                gap: 6px;
+            }}
+            .right-settings {{
+                grid-area: right;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 6px;
+                width: 100%;
+            }}
+            .control-item {{
+                font-size: 0.75rem;
+                gap: 4px;
+            }}
+            .control-item label {{
+                width: 36px; /* 微縮寬度以利小螢幕排版 */
+            }}
+            .control-item input {{
+                max-width: 60px; /* 手機版略微縮減輸入框寬度 */
+                padding: 3px 6px;
+                font-size: 0.8rem;
+            }}
+            .right-settings label {{
+                font-size: 0.75rem;
+            }}
+            .right-settings input {{
+                max-width: 60px; /* 同步縮小跳轉輸入框 */
+                padding: 3px 6px;
+                font-size: 0.8rem;
+            }}
+            .jump-btn {{
+                padding: 4px 8px;
+                font-size: 0.75rem;
+            }}
+            
+            /* 搜尋框與清單微調 */
+            .search-container {{
+                margin: 10px 0 0 0;
+            }}
+            #searchInput {{
+                padding: 8px 10px 8px 32px;
+                font-size: 0.85rem;
+            }}
+            .search-container i {{
+                left: 10px;
+                font-size: 0.8rem;
+            }}
+            .playlist-container {{
+                padding: 10px;
+            }}
+        }}
     </style>
 </head>
 <body>
