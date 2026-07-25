@@ -813,6 +813,7 @@ def generate_player():
         // 1. 解析網址參數
         const urlParams = new URLSearchParams(window.location.search);
         const packName = urlParams.get('pack') || '';
+        const startIndexParam = urlParams.get('index') || urlParams.get('track') || '';
 
         // 2. 動態加載資料檔與修正路徑
         function loadDataAndInit() {{
@@ -1126,16 +1127,24 @@ def generate_player():
             }}
         }});
 
-        // 載入第一首曲目（但不自動播放，符合現代瀏覽器限制與使用者習慣）
+        // 載入指定曲目（預設第 1 首，若網址指定 ?index=N 則自動跳轉，但不自動播放以符合瀏覽器規範）
         function initPlayer() {{
             initPlaylist();
             if (rawPlaylist.length > 0) {{
-                const first = rawPlaylist[0];
-                audio.src = first.file;
-                displayWord.innerText = first.word;
-                displayMeaning.innerText = first.meaning;
-                displaySentence.innerText = first.sentence || "";
-                displaySentenceTrans.innerText = first.sentence_trans || "";
+                let targetIndex = 0;
+                if (startIndexParam) {{
+                    const parsed = parseInt(startIndexParam, 10);
+                    if (!isNaN(parsed) && parsed >= 1 && parsed <= rawPlaylist.length) {{
+                        targetIndex = parsed - 1;
+                    }}
+                }}
+                currentIndex = targetIndex;
+                const targetItem = rawPlaylist[currentIndex];
+                audio.src = targetItem.file;
+                displayWord.innerText = targetItem.word;
+                displayMeaning.innerText = targetItem.meaning;
+                displaySentence.innerText = targetItem.sentence || "";
+                displaySentenceTrans.innerText = targetItem.sentence_trans || "";
                 highlightActiveTrack();
             }}
         }}
