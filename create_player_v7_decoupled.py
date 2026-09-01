@@ -1779,9 +1779,10 @@ def generate_player():
                         }
 
                         const fullAudioPath = packName ? `${packName}/${item.file}` : item.file;
+                        // 統一傳遞 1-based 單字序號 displayNum 給播放器，達成 player 與 mp3 參數完全同義
                         const playerUrl = packName 
-                            ? `player.html?pack=${encodeURIComponent(packName)}&track=${index}`
-                            : `player.html?track=${index}`;
+                            ? `player.html?pack=${encodeURIComponent(packName)}&index=${displayNum}`
+                            : `player.html?index=${displayNum}`;
 
                         // 預先產生全小寫搜尋索引字串，搜尋時只需 O(1) 包含比對
                         const searchIndex = `${item.word || ''} ${item.meaning || ''} ${item.sentence || ''} ${item.sentence_trans || ''}`.toLowerCase();
@@ -1860,25 +1861,18 @@ def generate_player():
             handleTargetParamScroll();
         }
 
-        // 5. 處理網址 index/track 參數精準定位與聚焦
+        // 5. 處理網址 index/track 參數精準定位與聚焦 (兩者完全同義，皆為 1-based 單字編號)
         function handleTargetParamScroll() {
             if (hasScrolledToTarget) return;
-            if (!targetIndexParam && !targetTrackParam) return;
+            const targetParam = urlParams.get('index') || urlParams.get('track');
+            if (!targetParam) return;
 
-            let targetItem = null;
-            if (targetIndexParam) {
-                const targetNum = parseInt(targetIndexParam, 10);
-                if (!isNaN(targetNum)) {
-                    // 優先比對 displayNum (如 70)，若無則比對 1-based index (第 70 筆)
-                    targetItem = currentFilteredData.find(item => item.displayNum === targetNum) ||
-                                 currentFilteredData.find(item => item.index === targetNum - 1);
-                }
-            } else if (targetTrackParam) {
-                const trackNum = parseInt(targetTrackParam, 10);
-                if (!isNaN(trackNum)) {
-                    targetItem = currentFilteredData.find(item => item.index === trackNum);
-                }
-            }
+            const targetNum = parseInt(targetParam, 10);
+            if (isNaN(targetNum) || targetNum < 1) return;
+
+            // index=80 與 track=80 完全同義：優先比對 displayNum (如 80)，若無則比對 1-based index (第 80 筆)
+            const targetItem = currentFilteredData.find(item => item.displayNum === targetNum) ||
+                               currentFilteredData.find(item => item.index === targetNum - 1);
 
             if (targetItem) {
                 const targetIdxInFiltered = currentFilteredData.indexOf(targetItem);
