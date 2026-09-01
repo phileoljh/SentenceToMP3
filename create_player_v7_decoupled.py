@@ -1642,7 +1642,6 @@ def generate_player():
                     <input type="text" id="search-input" placeholder="搜尋短語、中文或例句 (按 / 聚焦)..." oninput="onSearch()">
                     <i class="fa-solid fa-xmark clear-btn" id="clear-btn" onclick="clearSearch()"></i>
                 </div>
-                <a href="index2.html" class="nav-btn"><i class="fa-solid fa-arrow-left"></i> 門戶首頁</a>
                 <a href="player.html" id="player-link" class="nav-btn nav-btn-primary"><i class="fa-solid fa-play"></i> 發音播放器</a>
             </div>
         </div>
