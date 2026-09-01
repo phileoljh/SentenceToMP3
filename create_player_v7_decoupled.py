@@ -1168,7 +1168,7 @@ def generate_player():
     print(f"✅ 網頁引擎生成完成！已產出: {HTML_FILE}")
 
     # 3. 寫入高質感純閱讀清單 mp3.html 檔案 (支援 playlist.js 解耦與音檔試聽)
-    html_read_content = """<!DOCTYPE html>
+    html_read_content = r"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
@@ -1193,7 +1193,7 @@ def generate_player():
             --text-main: #f8fafc;
             --text-dim: #94a3b8;
             --text-muted: #64748b;
-            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-fast: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
         }
 
         * {
@@ -1221,13 +1221,13 @@ def generate_player():
             padding: 20px 24px 60px 24px;
         }
 
-        /* 頂部導航欄 */
+        /* 頂部導航欄 (Sticky Header) */
         header {
             position: sticky;
             top: 0;
-            background: rgba(15, 23, 42, 0.85);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
+            background: rgba(15, 23, 42, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             padding: 16px 0;
             z-index: 100;
             border-bottom: 1px solid var(--border-color);
@@ -1303,7 +1303,7 @@ def generate_player():
             font-weight: 600;
             text-decoration: none;
             cursor: pointer;
-            transition: var(--transition);
+            transition: var(--transition-fast);
             border: 1px solid var(--border-color);
             background: rgba(255, 255, 255, 0.04);
             color: var(--text-main);
@@ -1354,13 +1354,13 @@ def generate_player():
             border-radius: 10px;
             font-size: 0.88rem;
             outline: none;
-            transition: var(--transition);
+            transition: var(--transition-fast);
         }
 
         #search-input:focus {
             border-color: var(--primary-color);
             box-shadow: 0 0 12px var(--primary-glow);
-            background: rgba(15, 23, 42, 0.9);
+            background: rgba(15, 23, 42, 0.95);
         }
 
         .clear-btn {
@@ -1372,32 +1372,32 @@ def generate_player():
             cursor: pointer;
             display: none;
             font-size: 0.85rem;
-            transition: var(--transition);
+            transition: var(--transition-fast);
+            padding: 4px;
         }
 
         .clear-btn:hover {
             color: #fff;
         }
 
-        /* 表格排版容器 */
+        /* 表格排版容器 (啟用固定欄寬提升渲染效率) */
         .table-container {
             background: var(--surface-color);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
             border: 1px solid var(--border-color);
             border-radius: 18px;
             overflow: hidden;
-            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
             text-align: left;
+            table-layout: fixed; /* 固定表格佈局，大幅降低瀏覽器 Reflow 重排成本 */
         }
 
         thead th {
-            background: rgba(30, 41, 59, 0.95);
+            background: rgba(30, 41, 59, 0.98);
             font-family: 'Outfit', sans-serif;
             font-size: 0.92rem;
             font-weight: 600;
@@ -1422,7 +1422,9 @@ def generate_player():
         }
 
         tbody tr {
-            transition: var(--transition);
+            transition: background-color 0.15s ease;
+            content-visibility: auto; /* 延遲渲染非可視區域節點，極致優化長清單滾動效能 */
+            contain-intrinsic-size: 0 60px;
         }
 
         tbody tr:hover {
@@ -1430,11 +1432,32 @@ def generate_player():
         }
 
         tbody tr.playing-row {
-            background: rgba(99, 102, 241, 0.12);
+            background: rgba(99, 102, 241, 0.14) !important;
             border-left: 3px solid var(--primary-color);
         }
 
-        /* 欄位微調 */
+        /* 網址指定 index/track 的聚焦光暈脈衝動畫 */
+        @keyframes target-focus-pulse {
+            0% {
+                background: rgba(99, 102, 241, 0.35);
+                box-shadow: 0 0 25px rgba(99, 102, 241, 0.6);
+            }
+            40% {
+                background: rgba(236, 72, 153, 0.28);
+                box-shadow: 0 0 35px rgba(236, 72, 153, 0.7);
+            }
+            100% {
+                background: transparent;
+                box-shadow: none;
+            }
+        }
+
+        tbody tr.target-focused {
+            animation: target-focus-pulse 3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            border-left: 4px solid var(--secondary-color) !important;
+        }
+
+        /* 欄位寬度固定配置 (搭配 table-layout: fixed) */
         .col-no {
             width: 65px;
             color: var(--text-dim);
@@ -1444,7 +1467,7 @@ def generate_player():
         }
 
         .col-word {
-            width: 240px;
+            width: 25%;
             font-weight: 700;
             color: #fff;
             word-break: break-word;
@@ -1473,7 +1496,7 @@ def generate_player():
             align-items: center;
             justify-content: center;
             cursor: pointer;
-            transition: var(--transition);
+            transition: var(--transition-fast);
             flex-shrink: 0;
             font-size: 0.85rem;
         }
@@ -1487,9 +1510,9 @@ def generate_player():
         }
 
         .audio-play-btn.is-playing {
-            background: var(--secondary-color);
-            color: #ffffff;
-            border-color: var(--secondary-color);
+            background: var(--secondary-color) !important;
+            color: #ffffff !important;
+            border-color: var(--secondary-color) !important;
             animation: pulse-glow 1.5s infinite;
         }
 
@@ -1503,13 +1526,14 @@ def generate_player():
         }
 
         .col-meaning {
-            width: 200px;
+            width: 20%;
             font-weight: 600;
             color: var(--primary-light);
             word-break: break-word;
         }
 
         .col-sentence {
+            width: auto;
             color: #cbd5e1;
             font-style: italic;
             word-break: break-word;
@@ -1541,7 +1565,7 @@ def generate_player():
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid var(--border-color);
             text-decoration: none;
-            transition: var(--transition);
+            transition: var(--transition-fast);
         }
 
         .action-link:hover {
@@ -1564,6 +1588,24 @@ def generate_player():
             margin-bottom: 14px;
             color: rgba(255, 255, 255, 0.15);
             display: block;
+        }
+
+        /* 無限滾動加載指示區 */
+        .scroll-sentinel-wrapper {
+            padding: 20px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.88rem;
+            display: none;
+        }
+
+        .scroll-sentinel-wrapper.active {
+            display: block;
+        }
+
+        .scroll-sentinel-wrapper i {
+            margin-right: 6px;
+            animation: fa-spin 1.2s infinite linear;
         }
 
         @media (max-width: 900px) {
@@ -1598,6 +1640,7 @@ def generate_player():
                 border-radius: 12px;
                 margin-bottom: 10px;
                 background: rgba(30, 41, 59, 0.4);
+                contain-intrinsic-size: 0 180px;
             }
             tbody td {
                 border: none;
@@ -1639,8 +1682,8 @@ def generate_player():
             <div class="header-actions">
                 <div class="search-wrapper">
                     <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                    <input type="text" id="search-input" placeholder="搜尋短語、中文或例句 (按 / 聚焦)..." oninput="onSearch()">
-                    <i class="fa-solid fa-xmark clear-btn" id="clear-btn" onclick="clearSearch()"></i>
+                    <input type="text" id="search-input" placeholder="搜尋短語、中文或例句 (按 / 聚焦)..." autocomplete="off">
+                    <i class="fa-solid fa-xmark clear-btn" id="clear-btn"></i>
                 </div>
                 <a href="player.html" id="player-link" class="nav-btn nav-btn-primary"><i class="fa-solid fa-play"></i> 發音播放器</a>
             </div>
@@ -1660,21 +1703,36 @@ def generate_player():
                     </tr>
                 </thead>
                 <tbody id="table-body">
-                    <!-- JavaScript 將動態填入內容 -->
+                    <!-- JavaScript 將分批動態填入內容 -->
                 </tbody>
             </table>
+            <!-- 滾動自動加載監聽哨兵 (Sentinel) -->
+            <div id="scroll-sentinel" class="scroll-sentinel-wrapper">
+                <i class="fa-solid fa-circle-notch"></i> 載入更多單字中...
+            </div>
         </div>
     </div>
 
-    <!-- 載入外部資料檔與互動腳本 -->
+    <!-- 載入外部資料檔與高效率互動腳本 -->
     <script>
-        // 1. 解析網址參數
+        // 1. 全域變數與狀態管理
         const urlParams = new URLSearchParams(window.location.search);
         const packName = urlParams.get('pack') || '';
+        const targetIndexParam = urlParams.get('index');
+        const targetTrackParam = urlParams.get('track');
+        let hasScrolledToTarget = false;
         
-        let playlistData = [];
-        let currentAudio = null;
-        let currentPlayingBtn = null;
+        let fullPlaylistData = [];       // 完整原始資料
+        let currentFilteredData = [];    // 當前搜尋篩選後的資料
+        let renderedCount = 0;           // 目前已掛載到 DOM 的筆數
+        const CHUNK_SIZE = 60;           // 每批次增量渲染筆數 (首屏秒開)
+        
+        // 單一全域 Audio 實例 (避免重複建立音訊物件浪費記憶體)
+        const sharedAudio = new Audio();
+        let activePlayingBtn = null;
+        let activePlayingRow = null;
+        let searchDebounceTimer = null;
+        let intersectionObserver = null;
 
         // 2. 初始化與動態載入 playlist.js
         function init() {
@@ -1697,25 +1755,49 @@ def generate_player():
                 }
             });
 
+            // 綁定搜尋事件 (防抖 150ms 與清空按鈕)
+            setupSearchListeners();
+
+            // 綁定事件委派 (Event Delegation) 處理音訊播放
+            setupAudioDelegation();
+
+            // 建立滾動偵測器 (IntersectionObserver)
+            setupIntersectionObserver();
+
             // 動態載入 playlist.js
             const script = document.createElement('script');
             script.src = packName ? `${encodeURIComponent(packName)}/playlist.js` : 'playlist.js';
             
             script.onload = () => {
                 if (window.playlistData && window.playlistData.length > 0) {
-                    // 若有 packName，為音檔加上子目錄前綴
-                    if (packName) {
-                        window.playlistData.forEach(item => {
-                            item.fullAudioPath = `${packName}/${item.file}`;
-                        });
-                    } else {
-                        window.playlistData.forEach(item => {
-                            item.fullAudioPath = item.file;
-                        });
-                    }
+                    // 資料預先處理：預建搜尋索引、解析序號與連結，避免在渲染與過濾時重複運算
+                    fullPlaylistData = window.playlistData.map((item, index) => {
+                        let displayNum = index + 1;
+                        const fileMatch = item.file ? item.file.match(/(?:_|^)(\\d{4})_/) : null;
+                        if (fileMatch) {
+                            displayNum = parseInt(fileMatch[1], 10);
+                        }
 
-                    playlistData = window.playlistData;
-                    renderTable(playlistData);
+                        const fullAudioPath = packName ? `${packName}/${item.file}` : item.file;
+                        const playerUrl = packName 
+                            ? `player.html?pack=${encodeURIComponent(packName)}&track=${index}`
+                            : `player.html?track=${index}`;
+
+                        // 預先產生全小寫搜尋索引字串，搜尋時只需 O(1) 包含比對
+                        const searchIndex = `${item.word || ''} ${item.meaning || ''} ${item.sentence || ''} ${item.sentence_trans || ''}`.toLowerCase();
+
+                        return {
+                            ...item,
+                            index,
+                            displayNum,
+                            fullAudioPath,
+                            playerUrl,
+                            _searchIndex: searchIndex
+                        };
+                    });
+
+                    currentFilteredData = fullPlaylistData;
+                    renderInitial(currentFilteredData);
                 } else {
                     showError("清單內無有效單字資料。");
                 }
@@ -1742,14 +1824,21 @@ def generate_player():
                     </td>
                 </tr>
             `;
+            document.getElementById('scroll-sentinel').classList.remove('active');
         }
 
-        // 4. 渲染表格資料
-        function renderTable(data) {
+        // 4. 初始化渲染 (重設並渲染第一批次)
+        function renderInitial(data) {
             const tbody = document.getElementById('table-body');
             const stats = document.getElementById('stats-display');
+            const sentinel = document.getElementById('scroll-sentinel');
             
+            // 停止並重設正在播放的音訊
+            resetActiveAudioState();
+
             stats.innerHTML = `<i class="fa-solid fa-layer-group"></i> 共計 ${data.length.toLocaleString()} 個項目`;
+            tbody.innerHTML = '';
+            renderedCount = 0;
 
             if (data.length === 0) {
                 tbody.innerHTML = `
@@ -1760,140 +1849,238 @@ def generate_player():
                         </td>
                     </tr>
                 `;
+                sentinel.classList.remove('active');
                 return;
             }
 
-            const fragment = document.createDocumentFragment();
-            data.forEach((item, index) => {
-                const tr = document.createElement('tr');
-                tr.id = `row-${index}`;
-                
-                // 解析序號
-                let displayNum = index + 1;
-                const fileMatch = item.file.match(/_(\\d{4})_/);
-                if (fileMatch) {
-                    displayNum = parseInt(fileMatch[1]);
-                } else {
-                    const numMatch = item.file.match(/(\\d{4})_/);
-                    if (numMatch) {
-                        displayNum = parseInt(numMatch[1]);
-                    }
-                }
+            // 渲染第一批次 (CHUNK_SIZE 筆)
+            renderNextChunk();
 
-                // 播放器導向 URL
-                const playerUrl = packName 
-                    ? `player.html?pack=${encodeURIComponent(packName)}&track=${index}`
-                    : `player.html?track=${index}`;
+            // 若網址指定 index 或 track 參數，觸發自動載入至目標列並平滑滾動置中
+            handleTargetParamScroll();
+        }
+
+        // 5. 處理網址 index/track 參數精準定位與聚焦
+        function handleTargetParamScroll() {
+            if (hasScrolledToTarget) return;
+            if (!targetIndexParam && !targetTrackParam) return;
+
+            let targetItem = null;
+            if (targetIndexParam) {
+                const targetNum = parseInt(targetIndexParam, 10);
+                if (!isNaN(targetNum)) {
+                    // 優先比對 displayNum (如 70)，若無則比對 1-based index (第 70 筆)
+                    targetItem = currentFilteredData.find(item => item.displayNum === targetNum) ||
+                                 currentFilteredData.find(item => item.index === targetNum - 1);
+                }
+            } else if (targetTrackParam) {
+                const trackNum = parseInt(targetTrackParam, 10);
+                if (!isNaN(trackNum)) {
+                    targetItem = currentFilteredData.find(item => item.index === trackNum);
+                }
+            }
+
+            if (targetItem) {
+                const targetIdxInFiltered = currentFilteredData.indexOf(targetItem);
+                if (targetIdxInFiltered >= 0) {
+                    // 若目標項目在尚未渲染的批次，自動擴展渲染直到覆蓋該項目
+                    while (renderedCount <= targetIdxInFiltered && renderedCount < currentFilteredData.length) {
+                        renderNextChunk();
+                    }
+
+                    // 等待 DOM 排版完成後平滑滾動置中並套用呼吸光暈聚焦
+                    setTimeout(() => {
+                        const targetRow = document.getElementById(`row-${targetItem.index}`);
+                        if (targetRow) {
+                            targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            targetRow.classList.add('target-focused');
+                            hasScrolledToTarget = true;
+                        }
+                    }, 120);
+                }
+            }
+        }
+
+        // 6. 分批增量渲染函式 (每次渲染 CHUNK_SIZE 筆)
+        function renderNextChunk() {
+            if (renderedCount >= currentFilteredData.length) {
+                document.getElementById('scroll-sentinel').classList.remove('active');
+                return;
+            }
+
+            const tbody = document.getElementById('table-body');
+            const fragment = document.createDocumentFragment();
+            const nextLimit = Math.min(renderedCount + CHUNK_SIZE, currentFilteredData.length);
+
+            for (let i = renderedCount; i < nextLimit; i++) {
+                const item = currentFilteredData[i];
+                const tr = document.createElement('tr');
+                tr.id = `row-${item.index}`;
 
                 tr.innerHTML = `
-                    <td class="col-no">${displayNum}</td>
+                    <td class="col-no">${item.displayNum}</td>
                     <td class="col-word">
                         <div class="word-cell">
-                            <button class="audio-play-btn" title="試聽發音" onclick="togglePlayAudio('${escapeHtml(item.fullAudioPath)}', this, 'row-${index}')">
+                            <button type="button" class="audio-play-btn" title="試聽發音" data-index="${item.index}" data-audio="${escapeHtml(item.fullAudioPath)}">
                                 <i class="fa-solid fa-volume-high"></i>
                             </button>
-                            <span class="word-text">${escapeHtml(item.word)}</span>
+                            <span class="word-text">${escapeHtml(item.word || '')}</span>
                         </div>
                     </td>
-                    <td class="col-meaning">${escapeHtml(item.meaning)}</td>
+                    <td class="col-meaning">${escapeHtml(item.meaning || '')}</td>
                     <td class="col-sentence">
                         <div>${escapeHtml(item.sentence || '')}</div>
                         <div class="col-trans">${escapeHtml(item.sentence_trans || '')}</div>
                     </td>
                     <td class="col-action">
-                        <a href="${playerUrl}" class="action-link" title="在播放器中連續循環播放">
+                        <a href="${item.playerUrl}" class="action-link" title="在播放器中連續循環播放">
                             <i class="fa-solid fa-play"></i> 播放器
                         </a>
                     </td>
                 `;
                 fragment.appendChild(tr);
-            });
+            }
 
-            tbody.innerHTML = '';
             tbody.appendChild(fragment);
+            renderedCount = nextLimit;
+
+            // 檢查是否還有後續資料需要滾動加載
+            const sentinel = document.getElementById('scroll-sentinel');
+            if (renderedCount < currentFilteredData.length) {
+                sentinel.classList.add('active');
+            } else {
+                sentinel.classList.remove('active');
+            }
         }
 
-        // 5. 行內音訊播放控制
-        function togglePlayAudio(audioPath, btn, rowId) {
-            // 若點擊正在播放的按鈕則暫停
-            if (currentAudio && !currentAudio.paused && currentPlayingBtn === btn) {
-                currentAudio.pause();
-                resetAudioButtons();
+        // 6. 設置 Intersection Observer (滑動到底部自動載入下一批)
+        function setupIntersectionObserver() {
+            const sentinel = document.getElementById('scroll-sentinel');
+            if (!('IntersectionObserver' in window)) {
+                // 若瀏覽器不支援，降級為直接全部渲染
+                window.addEventListener('scroll', () => {
+                    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 500) {
+                        renderNextChunk();
+                    }
+                }, { passive: true });
                 return;
             }
 
-            // 停止前一個音訊
-            if (currentAudio) {
-                currentAudio.pause();
-                currentAudio.currentTime = 0;
-            }
-            resetAudioButtons();
+            intersectionObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && renderedCount < currentFilteredData.length) {
+                        renderNextChunk();
+                    }
+                });
+            }, {
+                root: null,
+                rootMargin: '400px', // 提前 400px 預先載入，提供無縫滾動體驗
+                threshold: 0.01
+            });
 
-            // 建立並播放新音訊
-            currentAudio = new Audio(audioPath);
-            currentPlayingBtn = btn;
+            intersectionObserver.observe(sentinel);
+        }
+
+        // 7. 事件委派：音訊播放控制
+        function setupAudioDelegation() {
+            const tbody = document.getElementById('table-body');
+
+            tbody.addEventListener('click', (e) => {
+                const playBtn = e.target.closest('.audio-play-btn');
+                if (!playBtn) return;
+
+                const audioPath = playBtn.dataset.audio;
+                const index = playBtn.dataset.index;
+                const rowElem = document.getElementById(`row-${index}`);
+
+                handlePlayAudio(audioPath, playBtn, rowElem);
+            });
+
+            // 音訊播放結束與錯誤事件監聽
+            sharedAudio.onended = () => {
+                resetActiveAudioState();
+            };
+
+            sharedAudio.onerror = () => {
+                console.warn("無法讀取音檔:", sharedAudio.src);
+                resetActiveAudioState();
+            };
+        }
+
+        function handlePlayAudio(audioPath, btn, rowElem) {
+            // 若點擊正在播放的同一個按鈕，則暫停
+            if (!sharedAudio.paused && activePlayingBtn === btn) {
+                sharedAudio.pause();
+                resetActiveAudioState();
+                return;
+            }
+
+            // 清除前一個播放按鈕與列的樣式 (O(1) 精準重設，不需遍歷全域 DOM)
+            resetActiveAudioState();
+
+            // 設定並播放音訊
+            sharedAudio.src = audioPath;
+            activePlayingBtn = btn;
+            activePlayingRow = rowElem;
 
             btn.classList.add('is-playing');
             btn.innerHTML = '<i class="fa-solid fa-pause"></i>';
-            const rowElem = document.getElementById(rowId);
             if (rowElem) rowElem.classList.add('playing-row');
 
-            currentAudio.onended = () => {
-                resetAudioButtons();
-            };
-
-            currentAudio.onerror = () => {
-                resetAudioButtons();
-                console.warn("無法讀取音檔:", audioPath);
-            };
-
-            currentAudio.play().catch(e => {
+            sharedAudio.play().catch(e => {
                 console.warn("音訊播放被瀏覽器阻擋或失敗:", e);
-                resetAudioButtons();
+                resetActiveAudioState();
             });
         }
 
-        function resetAudioButtons() {
-            document.querySelectorAll('.audio-play-btn').forEach(btn => {
-                btn.classList.remove('is-playing');
-                btn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
-            });
-            document.querySelectorAll('tbody tr').forEach(tr => {
-                tr.classList.remove('playing-row');
-            });
-            currentPlayingBtn = null;
-        }
-
-        // 6. 即時搜尋過濾
-        function onSearch() {
-            const query = document.getElementById('search-input').value.toLowerCase().trim();
-            const clearBtn = document.getElementById('clear-btn');
-            
-            clearBtn.style.display = query ? 'block' : 'none';
-
-            if (!query) {
-                renderTable(playlistData);
-                return;
+        function resetActiveAudioState() {
+            if (activePlayingBtn) {
+                activePlayingBtn.classList.remove('is-playing');
+                activePlayingBtn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+                activePlayingBtn = null;
             }
+            if (activePlayingRow) {
+                activePlayingRow.classList.remove('playing-row');
+                activePlayingRow = null;
+            }
+        }
 
-            const filtered = playlistData.filter(item => {
-                return (item.word && item.word.toLowerCase().includes(query)) ||
-                       (item.meaning && item.meaning.toLowerCase().includes(query)) ||
-                       (item.sentence && item.sentence.toLowerCase().includes(query)) ||
-                       (item.sentence_trans && item.sentence_trans.toLowerCase().includes(query));
+        // 8. 搜尋監聽 (150ms 防抖處理與快速清空)
+        function setupSearchListeners() {
+            const searchInput = document.getElementById('search-input');
+            const clearBtn = document.getElementById('clear-btn');
+
+            searchInput.addEventListener('input', () => {
+                const query = searchInput.value.trim();
+                clearBtn.style.display = query ? 'block' : 'none';
+
+                clearTimeout(searchDebounceTimer);
+                searchDebounceTimer = setTimeout(() => {
+                    performSearch(query.toLowerCase());
+                }, 150); // 150ms 防抖，大幅降低打字時的 CPU 運算與 DOM 渲染開銷
             });
 
-            renderTable(filtered);
+            clearBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                clearBtn.style.display = 'none';
+                clearTimeout(searchDebounceTimer);
+                performSearch('');
+                searchInput.focus();
+            });
         }
 
-        function clearSearch() {
-            const input = document.getElementById('search-input');
-            input.value = '';
-            input.focus();
-            onSearch();
+        function performSearch(query) {
+            if (!query) {
+                currentFilteredData = fullPlaylistData;
+            } else {
+                currentFilteredData = fullPlaylistData.filter(item => {
+                    return item._searchIndex && item._searchIndex.includes(query);
+                });
+            }
+            renderInitial(currentFilteredData);
         }
 
-        // 7. 字元跳脫防 XSS
+        // 9. 字元跳脫防 XSS 安全機制
         function escapeHtml(str) {
             if (!str) return '';
             return String(str)
@@ -1918,3 +2105,4 @@ def generate_player():
 
 if __name__ == "__main__":
     generate_player()
+
