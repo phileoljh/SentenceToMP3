@@ -1,7 +1,14 @@
 import os
+import sys
 import json
 import re
 import urllib.parse
+
+# 設定 Windows 終端機 UTF-8 輸出編碼
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure'):
+    sys.stderr.reconfigure(encoding='utf-8')
 
 # =================設定區=================
 MP3_DIR = "MP3_Output"                 # MP3 音檔儲存資料夾
@@ -1160,13 +1167,13 @@ def generate_player():
         html_f.write(html_content)
     print(f"✅ 網頁引擎生成完成！已產出: {HTML_FILE}")
 
-    # 3. 寫入高質感純閱讀清單 mp3.html 檔案 (不含播放器)
+    # 3. 寫入高質感純閱讀清單 mp3.html 檔案 (支援 playlist.js 解耦與音檔試聽)
     html_read_content = """<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>單字搭配短語閱讀清單</title>
+    <title id="page-title">單字搭配短語閱讀清單</title>
     <!-- 載入 Google Fonts 設計字體與 Font Awesome 6 圖示 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1176,12 +1183,17 @@ def generate_player():
         :root {
             --bg-color: #0f172a;
             --surface-color: rgba(30, 41, 59, 0.7);
+            --surface-hover: rgba(51, 65, 85, 0.8);
             --border-color: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(99, 102, 241, 0.3);
             --primary-color: #6366f1;
-            --primary-glow: rgba(99, 102, 241, 0.15);
+            --primary-light: #818cf8;
+            --primary-glow: rgba(99, 102, 241, 0.25);
+            --secondary-color: #ec4899;
             --text-main: #f8fafc;
             --text-dim: #94a3b8;
-            --transition: all 0.2s ease;
+            --text-muted: #64748b;
+            --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         }
 
         * {
@@ -1193,10 +1205,10 @@ def generate_player():
         body {
             background-color: var(--bg-color);
             background-image:
-                radial-gradient(circle at 10% 10%, rgba(99, 102, 241, 0.1) 0%, transparent 40%),
-                radial-gradient(circle at 90% 90%, rgba(236, 72, 153, 0.05) 0%, transparent 40%);
+                radial-gradient(circle at 10% 10%, rgba(99, 102, 241, 0.12) 0%, transparent 40%),
+                radial-gradient(circle at 90% 90%, rgba(236, 72, 153, 0.08) 0%, transparent 40%);
             color: var(--text-main);
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             line-height: 1.6;
             min-height: 100vh;
             padding: 0;
@@ -1204,21 +1216,22 @@ def generate_player():
 
         .container {
             width: 100%;
-            max-width: 1200px;
+            max-width: 1300px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 20px 24px 60px 24px;
         }
 
+        /* 頂部導航欄 */
         header {
             position: sticky;
             top: 0;
-            background: rgba(15, 23, 42, 0.8);
+            background: rgba(15, 23, 42, 0.85);
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            padding: 20px 0;
+            padding: 16px 0;
             z-index: 100;
             border-bottom: 1px solid var(--border-color);
-            margin-bottom: 20px;
+            margin-bottom: 24px;
         }
 
         .header-content {
@@ -1226,17 +1239,24 @@ def generate_player():
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 15px;
-            max-width: 1200px;
+            gap: 16px;
+            max-width: 1300px;
             margin: 0 auto;
-            padding: 0 20px;
+            padding: 0 24px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
         }
 
         h1 {
             font-family: 'Outfit', sans-serif;
-            font-size: 1.6rem;
+            font-size: 1.5rem;
             font-weight: 700;
-            background: linear-gradient(135deg, #fff 40%, var(--primary-color) 100%);
+            background: linear-gradient(135deg, #ffffff 40%, var(--primary-light) 100%);
             background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
@@ -1250,53 +1270,124 @@ def generate_player():
             -webkit-text-fill-color: initial;
         }
 
-        .stats {
+        .stats-badge {
             font-size: 0.85rem;
             color: var(--text-dim);
             background: rgba(255, 255, 255, 0.05);
-            padding: 4px 12px;
-            border-radius: 20px;
+            padding: 5px 14px;
+            border-radius: 999px;
             border: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
+        .stats-badge i {
+            color: var(--primary-light);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .nav-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border-radius: 10px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition);
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text-main);
+        }
+
+        .nav-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: var(--border-hover);
+            transform: translateY(-1px);
+        }
+
+        .nav-btn-primary {
+            background: linear-gradient(135deg, var(--primary-color), #4f46e5);
+            border-color: transparent;
+            color: #ffffff;
+            box-shadow: 0 4px 14px var(--primary-glow);
+        }
+
+        .nav-btn-primary:hover {
+            background: linear-gradient(135deg, #4f46e5, #4338ca);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+            color: #ffffff;
+        }
+
+        /* 搜尋輸入區塊 */
         .search-wrapper {
             position: relative;
             width: 100%;
-            max-width: 400px;
+            max-width: 320px;
         }
 
-        .search-wrapper i {
+        .search-wrapper i.search-icon {
             position: absolute;
-            left: 12px;
+            left: 14px;
             top: 50%;
             transform: translateY(-50%);
             color: var(--text-dim);
+            font-size: 0.85rem;
+            pointer-events: none;
         }
 
         #search-input {
             width: 100%;
-            background: rgba(15, 23, 42, 0.6);
+            background: rgba(15, 23, 42, 0.7);
             border: 1px solid var(--border-color);
             color: #fff;
-            padding: 10px 12px 10px 36px;
+            padding: 9px 36px 9px 36px;
             border-radius: 10px;
-            font-size: 0.9rem;
+            font-size: 0.88rem;
             outline: none;
             transition: var(--transition);
         }
 
         #search-input:focus {
             border-color: var(--primary-color);
-            box-shadow: 0 0 10px var(--primary-glow);
+            box-shadow: 0 0 12px var(--primary-glow);
+            background: rgba(15, 23, 42, 0.9);
         }
 
-        /* 表格排版 */
+        .clear-btn {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            cursor: pointer;
+            display: none;
+            font-size: 0.85rem;
+            transition: var(--transition);
+        }
+
+        .clear-btn:hover {
+            color: #fff;
+        }
+
+        /* 表格排版容器 */
         .table-container {
             background: var(--surface-color);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
             border: 1px solid var(--border-color);
-            border-radius: 16px;
+            border-radius: 18px;
             overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.3);
         }
 
         table {
@@ -1305,40 +1396,47 @@ def generate_player():
             text-align: left;
         }
 
-        th {
-            background: rgba(30, 41, 59, 0.9);
+        thead th {
+            background: rgba(30, 41, 59, 0.95);
             font-family: 'Outfit', sans-serif;
-            font-size: 0.95rem;
+            font-size: 0.92rem;
             font-weight: 600;
             color: var(--text-main);
-            padding: 14px 16px;
+            padding: 14px 18px;
             border-bottom: 1px solid var(--border-color);
             position: sticky;
             top: 0;
             z-index: 10;
+            letter-spacing: 0.02em;
         }
 
-        td {
-            padding: 14px 16px;
+        tbody td {
+            padding: 16px 18px;
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
             font-size: 0.95rem;
-            vertical-align: top;
+            vertical-align: middle;
         }
 
-        tr:last-child td {
+        tbody tr:last-child td {
             border-bottom: none;
         }
 
-        tr {
+        tbody tr {
             transition: var(--transition);
         }
 
-        tr:hover {
-            background: rgba(99, 102, 241, 0.04);
+        tbody tr:hover {
+            background: rgba(99, 102, 241, 0.05);
         }
 
+        tbody tr.playing-row {
+            background: rgba(99, 102, 241, 0.12);
+            border-left: 3px solid var(--primary-color);
+        }
+
+        /* 欄位微調 */
         .col-no {
-            width: 60px;
+            width: 65px;
             color: var(--text-dim);
             font-weight: 600;
             font-family: 'Outfit', sans-serif;
@@ -1346,57 +1444,147 @@ def generate_player():
         }
 
         .col-word {
-            width: 220px;
+            width: 240px;
             font-weight: 700;
             color: #fff;
             word-break: break-word;
         }
 
+        .word-cell {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .word-text {
+            font-size: 1.05rem;
+            letter-spacing: -0.01em;
+        }
+
+        /* 音檔行內試聽按鈕 */
+        .audio-play-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1px solid var(--border-color);
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--primary-light);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition);
+            flex-shrink: 0;
+            font-size: 0.85rem;
+        }
+
+        .audio-play-btn:hover {
+            background: var(--primary-color);
+            color: #ffffff;
+            border-color: var(--primary-color);
+            transform: scale(1.08);
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        .audio-play-btn.is-playing {
+            background: var(--secondary-color);
+            color: #ffffff;
+            border-color: var(--secondary-color);
+            animation: pulse-glow 1.5s infinite;
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% {
+                box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.4);
+            }
+            50% {
+                box-shadow: 0 0 0 8px rgba(236, 72, 153, 0);
+            }
+        }
+
         .col-meaning {
-            width: 220px;
+            width: 200px;
             font-weight: 600;
-            color: #818cf8;
+            color: var(--primary-light);
             word-break: break-word;
         }
 
         .col-sentence {
-            color: var(--text-dim);
+            color: #cbd5e1;
             font-style: italic;
             word-break: break-word;
+            line-height: 1.5;
         }
 
         .col-trans {
-            color: rgba(148, 163, 184, 0.7);
+            color: var(--text-dim);
             word-break: break-word;
-            margin-top: 4px;
+            margin-top: 5px;
             font-style: normal;
+            font-size: 0.88rem;
         }
 
-        /* 找不到結果 */
+        .col-action {
+            width: 110px;
+            text-align: center;
+        }
+
+        .action-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-dim);
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--border-color);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .action-link:hover {
+            background: rgba(99, 102, 241, 0.15);
+            color: #ffffff;
+            border-color: var(--primary-color);
+            transform: translateY(-1px);
+        }
+
+        /* 找不到結果或錯誤訊息 */
         .no-results {
             text-align: center;
-            padding: 40px;
+            padding: 60px 20px;
             color: var(--text-dim);
             font-size: 1rem;
         }
 
         .no-results i {
-            font-size: 2.5rem;
-            margin-bottom: 12px;
-            color: rgba(255, 255, 255, 0.1);
+            font-size: 2.8rem;
+            margin-bottom: 14px;
+            color: rgba(255, 255, 255, 0.15);
             display: block;
         }
 
-        @media (max-width: 768px) {
-            th, td {
-                padding: 10px 12px;
-            }
+        @media (max-width: 900px) {
             .header-content {
                 flex-direction: column;
-                align-items: flex-start;
+                align-items: stretch;
+            }
+            .header-left, .header-actions {
+                justify-content: space-between;
             }
             .search-wrapper {
                 max-width: 100%;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px 14px 40px 14px;
+            }
+            tbody td, thead th {
+                padding: 12px 10px;
             }
             table, thead, tbody, th, td, tr {
                 display: block;
@@ -1404,11 +1592,14 @@ def generate_player():
             thead {
                 display: none;
             }
-            tr {
+            tbody tr {
                 border-bottom: 1px solid var(--border-color);
-                padding: 15px 10px;
+                padding: 16px 14px;
+                border-radius: 12px;
+                margin-bottom: 10px;
+                background: rgba(30, 41, 59, 0.4);
             }
-            td {
+            tbody td {
                 border: none;
                 padding: 4px 0;
                 width: 100% !important;
@@ -1416,15 +1607,22 @@ def generate_player():
             .col-no {
                 font-size: 0.8rem;
                 text-align: left;
+                margin-bottom: 4px;
             }
             .col-word {
-                font-size: 1.1rem;
+                font-size: 1.15rem;
+                margin-bottom: 4px;
             }
             .col-meaning {
                 font-size: 0.95rem;
+                margin-bottom: 6px;
             }
-            .col-trans {
-                margin-top: 2px;
+            .col-sentence {
+                margin-bottom: 8px;
+            }
+            .col-action {
+                text-align: left;
+                margin-top: 8px;
             }
         }
     </style>
@@ -1432,11 +1630,20 @@ def generate_player():
 <body>
     <header>
         <div class="header-content">
-            <h1><i class="fa-solid fa-book-open"></i> 單字搭配短語閱讀清單</h1>
-            <div class="stats" id="stats-display">載入中...</div>
-            <div class="search-wrapper">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="search-input" placeholder="在清單中搜尋短語、中文或例句..." oninput="onSearch()">
+            <div class="header-left">
+                <h1><i class="fa-solid fa-book-open"></i> <span id="pack-title">閱讀清單</span></h1>
+                <div class="stats-badge" id="stats-display">
+                    <i class="fa-solid fa-layer-group"></i> 載入中...
+                </div>
+            </div>
+            <div class="header-actions">
+                <div class="search-wrapper">
+                    <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                    <input type="text" id="search-input" placeholder="搜尋短語、中文或例句 (按 / 聚焦)..." oninput="onSearch()">
+                    <i class="fa-solid fa-xmark clear-btn" id="clear-btn" onclick="clearSearch()"></i>
+                </div>
+                <a href="index2.html" class="nav-btn"><i class="fa-solid fa-arrow-left"></i> 門戶首頁</a>
+                <a href="player.html" id="player-link" class="nav-btn nav-btn-primary"><i class="fa-solid fa-play"></i> 發音播放器</a>
             </div>
         </div>
     </header>
@@ -1447,9 +1654,10 @@ def generate_player():
                 <thead>
                     <tr>
                         <th class="col-no">No.</th>
-                        <th class="col-word">英文短語</th>
+                        <th class="col-word">英文短語 / 單字</th>
                         <th class="col-meaning">中文翻譯</th>
                         <th class="col-sentence">常用搭配句與中譯</th>
+                        <th class="col-action">快捷操作</th>
                     </tr>
                 </thead>
                 <tbody id="table-body">
@@ -1459,55 +1667,97 @@ def generate_player():
         </div>
     </div>
 
-    <!-- 載入外部資料檔 -->
+    <!-- 載入外部資料檔與互動腳本 -->
     <script>
-        // 優先載入外部的 playlist.js
+        // 1. 解析網址參數
         const urlParams = new URLSearchParams(window.location.search);
         const packName = urlParams.get('pack') || '';
         
         let playlistData = [];
+        let currentAudio = null;
+        let currentPlayingBtn = null;
 
+        // 2. 初始化與動態載入 playlist.js
         function init() {
+            // 更新播放器導航連結
+            const playerLink = document.getElementById('player-link');
+            if (packName) {
+                playerLink.href = `player.html?pack=${encodeURIComponent(packName)}`;
+                document.getElementById('pack-title').innerText = `${packName} 閱讀清單`;
+                document.getElementById('page-title').innerText = `${packName} 閱讀清單`;
+            } else {
+                playerLink.href = 'player.html';
+                document.getElementById('pack-title').innerText = '單字搭配短語閱讀清單';
+            }
+
+            // 鍵盤快捷鍵 '/' 聚焦搜尋框
+            document.addEventListener('keydown', (e) => {
+                if (e.key === '/' && document.activeElement !== document.getElementById('search-input')) {
+                    e.preventDefault();
+                    document.getElementById('search-input').focus();
+                }
+            });
+
+            // 動態載入 playlist.js
             const script = document.createElement('script');
             script.src = packName ? `${encodeURIComponent(packName)}/playlist.js` : 'playlist.js';
+            
             script.onload = () => {
                 if (window.playlistData && window.playlistData.length > 0) {
+                    // 若有 packName，為音檔加上子目錄前綴
+                    if (packName) {
+                        window.playlistData.forEach(item => {
+                            item.fullAudioPath = `${packName}/${item.file}`;
+                        });
+                    } else {
+                        window.playlistData.forEach(item => {
+                            item.fullAudioPath = item.file;
+                        });
+                    }
+
                     playlistData = window.playlistData;
                     renderTable(playlistData);
                 } else {
-                    showError("清單內無有效資料。");
+                    showError("清單內無有效單字資料。");
                 }
             };
+
             script.onerror = () => {
-                showError("無法載入 playlist.js，請確認檔案是否存在。");
+                showError(packName 
+                    ? `無法載入詞彙包 "${packName}" 的資料，請確認資料夾與 playlist.js 是否存在。`
+                    : "找不到根目錄的 playlist.js，請確認已執行生成腳本！"
+                );
             };
+
             document.head.appendChild(script);
         }
 
+        // 3. 顯示錯誤訊息
         function showError(msg) {
-            document.getElementById('stats-display').innerText = "⚠️ 錯誤";
+            document.getElementById('stats-display').innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color: #ef4444;"></i> 載入失敗';
             document.getElementById('table-body').innerHTML = `
                 <tr>
-                    <td colspan="4" class="no-results">
+                    <td colspan="5" class="no-results">
                         <i class="fa-solid fa-triangle-exclamation" style="color: #ef4444;"></i>
-                        ${msg}
+                        <div>${msg}</div>
                     </td>
                 </tr>
             `;
         }
 
+        // 4. 渲染表格資料
         function renderTable(data) {
             const tbody = document.getElementById('table-body');
             const stats = document.getElementById('stats-display');
             
-            stats.innerText = `共計 ${data.length.toLocaleString()} 個項目`;
+            stats.innerHTML = `<i class="fa-solid fa-layer-group"></i> 共計 ${data.length.toLocaleString()} 個項目`;
 
             if (data.length === 0) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="4" class="no-results">
+                        <td colspan="5" class="no-results">
                             <i class="fa-solid fa-face-frown"></i>
-                            沒有找到符合搜尋條件的項目
+                            <div>沒有找到符合搜尋條件的項目</div>
                         </td>
                     </tr>
                 `;
@@ -1517,8 +1767,9 @@ def generate_player():
             const fragment = document.createDocumentFragment();
             data.forEach((item, index) => {
                 const tr = document.createElement('tr');
+                tr.id = `row-${index}`;
                 
-                // 取得原 playlist 中的序號（從 file 名稱中提取，或直接使用 index + 1）
+                // 解析序號
                 let displayNum = index + 1;
                 const fileMatch = item.file.match(/_(\\d{4})_/);
                 if (fileMatch) {
@@ -1530,13 +1781,30 @@ def generate_player():
                     }
                 }
 
+                // 播放器導向 URL
+                const playerUrl = packName 
+                    ? `player.html?pack=${encodeURIComponent(packName)}&track=${index}`
+                    : `player.html?track=${index}`;
+
                 tr.innerHTML = `
                     <td class="col-no">${displayNum}</td>
-                    <td class="col-word">${escapeHtml(item.word)}</td>
+                    <td class="col-word">
+                        <div class="word-cell">
+                            <button class="audio-play-btn" title="試聽發音" onclick="togglePlayAudio('${escapeHtml(item.fullAudioPath)}', this, 'row-${index}')">
+                                <i class="fa-solid fa-volume-high"></i>
+                            </button>
+                            <span class="word-text">${escapeHtml(item.word)}</span>
+                        </div>
+                    </td>
                     <td class="col-meaning">${escapeHtml(item.meaning)}</td>
                     <td class="col-sentence">
                         <div>${escapeHtml(item.sentence || '')}</div>
                         <div class="col-trans">${escapeHtml(item.sentence_trans || '')}</div>
+                    </td>
+                    <td class="col-action">
+                        <a href="${playerUrl}" class="action-link" title="在播放器中連續循環播放">
+                            <i class="fa-solid fa-play"></i> 播放器
+                        </a>
                     </td>
                 `;
                 fragment.appendChild(tr);
@@ -1546,16 +1814,72 @@ def generate_player():
             tbody.appendChild(fragment);
         }
 
+        // 5. 行內音訊播放控制
+        function togglePlayAudio(audioPath, btn, rowId) {
+            // 若點擊正在播放的按鈕則暫停
+            if (currentAudio && !currentAudio.paused && currentPlayingBtn === btn) {
+                currentAudio.pause();
+                resetAudioButtons();
+                return;
+            }
+
+            // 停止前一個音訊
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio.currentTime = 0;
+            }
+            resetAudioButtons();
+
+            // 建立並播放新音訊
+            currentAudio = new Audio(audioPath);
+            currentPlayingBtn = btn;
+
+            btn.classList.add('is-playing');
+            btn.innerHTML = '<i class="fa-solid fa-pause"></i>';
+            const rowElem = document.getElementById(rowId);
+            if (rowElem) rowElem.classList.add('playing-row');
+
+            currentAudio.onended = () => {
+                resetAudioButtons();
+            };
+
+            currentAudio.onerror = () => {
+                resetAudioButtons();
+                console.warn("無法讀取音檔:", audioPath);
+            };
+
+            currentAudio.play().catch(e => {
+                console.warn("音訊播放被瀏覽器阻擋或失敗:", e);
+                resetAudioButtons();
+            });
+        }
+
+        function resetAudioButtons() {
+            document.querySelectorAll('.audio-play-btn').forEach(btn => {
+                btn.classList.remove('is-playing');
+                btn.innerHTML = '<i class="fa-solid fa-volume-high"></i>';
+            });
+            document.querySelectorAll('tbody tr').forEach(tr => {
+                tr.classList.remove('playing-row');
+            });
+            currentPlayingBtn = null;
+        }
+
+        // 6. 即時搜尋過濾
         function onSearch() {
             const query = document.getElementById('search-input').value.toLowerCase().trim();
+            const clearBtn = document.getElementById('clear-btn');
+            
+            clearBtn.style.display = query ? 'block' : 'none';
+
             if (!query) {
                 renderTable(playlistData);
                 return;
             }
 
             const filtered = playlistData.filter(item => {
-                return item.word.toLowerCase().includes(query) ||
-                       item.meaning.toLowerCase().includes(query) ||
+                return (item.word && item.word.toLowerCase().includes(query)) ||
+                       (item.meaning && item.meaning.toLowerCase().includes(query)) ||
                        (item.sentence && item.sentence.toLowerCase().includes(query)) ||
                        (item.sentence_trans && item.sentence_trans.toLowerCase().includes(query));
             });
@@ -1563,9 +1887,17 @@ def generate_player():
             renderTable(filtered);
         }
 
+        function clearSearch() {
+            const input = document.getElementById('search-input');
+            input.value = '';
+            input.focus();
+            onSearch();
+        }
+
+        // 7. 字元跳脫防 XSS
         function escapeHtml(str) {
             if (!str) return '';
-            return str
+            return String(str)
                 .replace(/&/g, "&amp;")
                 .replace(/</g, "&lt;")
                 .replace(/>/g, "&gt;")
@@ -1573,6 +1905,7 @@ def generate_player():
                 .replace(/'/g, "&#039;");
         }
 
+        // 啟動初始化
         init();
     </script>
 </body>
