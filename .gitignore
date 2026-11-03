@@ -10,6 +10,10 @@ MP3_Output/
 *.html
 *.js
 playlist.js
+skip.txt
+skip.js
+# Exception: 保留根目錄的 skip.js 作為範本供 Git 追蹤
+!/skip.js
 # Exception: Keep the template or script if any HTML is source code (but here they are generated)
 
 # Ignore Data Input Files

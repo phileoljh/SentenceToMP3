@@ -13,6 +13,7 @@ if hasattr(sys.stderr, 'reconfigure'):
 # =================設定區=================
 MP3_DIR = "MP3_Output"                 # MP3 音檔儲存資料夾
 INPUT_FILE = "mp3.md"                  # 來源 Markdown 單字檔案
+SKIP_FILE = "skip.js"                  # 跳過單字設定檔 (選用，支援單號、逗號分隔、區間如 1-10)
 JS_PLAYLIST_FILE = "playlist.js"       # 產出的解耦資料檔名
 HTML_FILE = "player.html"              # 產出的全域單一播放器網頁檔名
 READ_HTML_FILE = "mp3.html"            # 產出的全域閱讀清單網頁檔名
@@ -84,27 +85,37 @@ def parse_md_file(filepath):
             })
     return word_data
 
-def generate_player():
+def generate_player(target_dir=None):
     """
     主生成函式：
-    1. 解析 md 檔案資料。
-    2. 直接以單字表順序產生播放清單與檔名。
-    3. 生成 playlist.js 資料檔。
-    4. 生成 player_v7_decoupled.html 播放器網頁引擎。
+    若指定 target_dir，則針對該目錄進行生成（讀取該目錄之 mp3.md）；
+    若未指定，則預設針對當前工作目錄。
     """
+    base_dir = target_dir if target_dir else "."
+    input_file = os.path.join(base_dir, INPUT_FILE)
+    skip_file = os.path.join(base_dir, SKIP_FILE)
+    js_playlist_file = os.path.join(base_dir, JS_PLAYLIST_FILE)
+    html_file = os.path.join(base_dir, HTML_FILE)
+    read_html_file = os.path.join(base_dir, READ_HTML_FILE)
+
+    if not os.path.exists(input_file):
+        return
+
+    abs_base = os.path.abspath(base_dir)
+    print(f"\n📂 正在處理目標目錄：{abs_base}")
+
     # 解析單字清單資料 (Source of Truth)
-    text_data = parse_md_file(INPUT_FILE)
-    
+    text_data = parse_md_file(input_file)
     if not text_data:
-        print("⚠️ 警告：沒有偵測到任何有效的單字資料。")
+        print(f"⚠️ 警告：在 {input_file} 沒有偵測到任何有效的單字資料。")
         return
 
     playlist = []
     
-    # 建立播放清單結構
+    # 建立播放清單結構 (維持原始純粹標準格式，絕對不加入額外自訂欄位)
     for i, item in enumerate(text_data):
         index = i + 1
-        # 清理英文單字取得合法檔名
+        # 清理英文單字取得合法檔名 (維持原始 index，確保音檔檔名絕對不脫鉤)
         safe_filename_text = re.sub(r'[\\/*?:"<>|]', "", item["word"])
         filename = f"{index:04d}_{safe_filename_text}.mp3"
         
@@ -120,14 +131,24 @@ def generate_player():
         }
         playlist.append(playlist_item)
 
-    # 1. 寫入解耦後的 playlist.js 檔案
-    # 透過 window.playlistData 宣告，讓本地端 (file://) 可以無障礙載入，避開 CORS 同源政策限制
-    js_playlist_content = f"window.playlistData = {json.dumps(playlist, ensure_ascii=False, indent=2)};"
-    with open(JS_PLAYLIST_FILE, "w", encoding="utf-8") as js_f:
+    # 1. 寫入解耦後的 playlist.js 檔案 (純粹 window.playlistData 陣列格式)
+    js_playlist_content = f"window.playlistData = {json.dumps(playlist, ensure_ascii=False, indent=2)};\n"
+    with open(js_playlist_file, "w", encoding="utf-8") as js_f:
         js_f.write(js_playlist_content)
-    print(f"✅ 資料解耦完成！已生成: {JS_PLAYLIST_FILE}")
+    print(f"✅ 資料解耦完成！已生成標準格式: {js_playlist_file} (總計: {len(text_data)} 字)")
 
-    # 2. 寫入高質感解耦播放器 player_v7_decoupled.html 檔案
+    # 2. 若該目錄尚無 skip.js，產出初始範本檔 (若已存在則完全保留，絕不覆寫)
+    if not os.path.exists(skip_file):
+        skip_template = (
+            "// 欲跳過的單字編號清單 (支援單一數字、逗號分隔、連續區間如 1-10)\n"
+            "// 修改後存檔，瀏覽器按 F5 重新整理即刻生效，完全不需重新執行 Python！\n"
+            'window.skipConfig = "";\n'
+        )
+        with open(skip_file, "w", encoding="utf-8") as sf:
+            sf.write(skip_template)
+        print(f"📄 已建立 skip.js 設定檔範本: {skip_file}")
+
+    # 3. 寫入高質感解耦播放器 player.html 檔案
     html_content = f"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -424,6 +445,11 @@ def generate_player():
             border-radius: 6px;
             outline: none;
             transition: var(--transition);
+            min-width: 105px;
+            max-width: 130px;
+            text-align: center;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 600;
         }}
 
         .right-settings input:focus {{
@@ -682,15 +708,52 @@ def generate_player():
                 font-size: 0.75rem;
             }}
             .right-settings input {{
-                max-width: 60px; /* 同步縮小跳轉輸入框 */
-                padding: 3px 6px;
+                min-width: 85px;
+                max-width: 110px;
+                padding: 4px 6px;
                 font-size: 0.8rem;
+                text-align: center;
+                font-family: 'Outfit', sans-serif;
+                font-weight: 600;
             }}
             .jump-btn {{
                 padding: 4px 8px;
                 font-size: 0.75rem;
             }}
             
+            /* 強化模式 / 跳過模式開關按鈕樣式 */
+            .mode-toggle-btn {{
+                background: rgba(99, 102, 241, 0.18);
+                color: #a5b4fc;
+                border: 1px solid rgba(99, 102, 241, 0.45);
+                border-radius: 999px;
+                padding: 5px 13px;
+                font-size: 0.8rem;
+                font-weight: 600;
+                cursor: pointer;
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                transition: var(--transition);
+                backdrop-filter: blur(8px);
+            }}
+            .mode-toggle-btn:hover {{
+                background: rgba(99, 102, 241, 0.32);
+                border-color: #818cf8;
+                transform: translateY(-1px);
+                box-shadow: 0 0 12px var(--primary-glow);
+            }}
+            .mode-toggle-btn.is-all-mode {{
+                background: rgba(255, 255, 255, 0.06);
+                color: var(--text-dim);
+                border-color: rgba(255, 255, 255, 0.15);
+            }}
+            .mode-toggle-btn.is-all-mode:hover {{
+                background: rgba(255, 255, 255, 0.12);
+                color: #fff;
+                box-shadow: none;
+            }}
+
             /* 搜尋框與清單微調 */
             .search-container {{
                 margin: 10px 0 0 0;
@@ -713,7 +776,17 @@ def generate_player():
 
     <div class="app-container" id="appBody">
         <div class="player-header">
-            <h2 class="header-title"><i class="fa-solid fa-graduation-cap"></i> 聽力大師(解耦版)</h2>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <h2 class="header-title" style="margin-bottom: 0;"><i class="fa-solid fa-graduation-cap"></i> 聽力大師(解耦版)</h2>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <button class="mode-toggle-btn" id="skipToggleBtn" onclick="toggleSkipMode()" title="點擊切換是否跳過已熟悉單字">
+                        <i class="fa-solid fa-bullseye"></i> <span id="skipToggleText">🎯 強化模式</span>
+                    </button>
+                    <button class="mode-toggle-btn" id="skipEditBtn" onclick="openSkipEditor()" title="在網頁上自訂跳過編號 (即刻生效，無需重新跑 Python)" style="padding: 5px 9px;">
+                        <i class="fa-solid fa-gear"></i>
+                    </button>
+                </div>
+            </div>
             
             <!-- 目前朗讀單字顯示區 -->
             <div id="current-info">
@@ -771,8 +844,7 @@ def generate_player():
                 <!-- 右側：跳轉區 (水平排列) -->
                 <div class="right-settings">
                     <label>跳至</label>
-                    <!-- 跳轉框同步加寬至 80px，達成完全的對稱美學 -->
-                    <input type="number" id="jumpInput" placeholder="編號" min="1" style="width: 100%; max-width: 80px;">
+                    <input type="number" id="jumpInput" placeholder="1-9999" min="1">
                     <button onclick="jumpToTrack()" class="jump-btn">跳轉</button>
                 </div>
             </div>
@@ -796,6 +868,7 @@ def generate_player():
         let rawPlaylist = [];
         let activePlaylist = [];
         let activeIndices = [];
+        let isSkipMode = true;       // 是否啟用跳過模式 (預設開啟)
 
         let currentIndex = 0;       // 目前播音的原始索引
         let currentPlayCount = 1;   // 目前單字播放次數計數
@@ -816,6 +889,8 @@ def generate_player():
         const playPauseBtn = document.getElementById('playPauseBtn');
         const jumpInput = document.getElementById('jumpInput');
         const searchInput = document.getElementById('searchInput');
+        const skipToggleBtn = document.getElementById('skipToggleBtn');
+        const skipToggleText = document.getElementById('skipToggleText');
 
         // 1. 解析網址參數
         const urlParams = new URLSearchParams(window.location.search);
@@ -824,51 +899,236 @@ def generate_player():
 
         // 2. 動態加載資料檔與修正路徑
         function loadDataAndInit() {{
-            if (packName) {{
-                const script = document.createElement('script');
-                script.src = `${{encodeURIComponent(packName)}}/playlist.js`;
-                script.onerror = () => {{
-                    showError(`無法載入詞彙包 "${{packName}}" 的資料，請確認資料夾與 playlist.js 是否存在。`);
-                }};
-                script.onload = () => {{
-                    if (window.playlistData && window.playlistData.length > 0) {{
-                        // 在音檔路徑前方補上子目錄路徑前綴
+            const dataScriptPath = packName 
+                ? `${{encodeURIComponent(packName)}}/playlist.js`
+                : 'playlist.js';
+
+            const script = document.createElement('script');
+            script.src = dataScriptPath;
+            script.onerror = () => {{
+                showError(packName 
+                    ? `無法載入詞彙包 "${{packName}}" 的資料，請確認資料夾與 playlist.js 是否存在。`
+                    : "找不到根目錄的 playlist.js。請確認已執行生成腳本！"
+                );
+            }};
+            script.onload = () => {{
+                if (window.playlistData && window.playlistData.length > 0) {{
+                    if (packName) {{
                         window.playlistData.forEach(item => {{
                             item.file = `${{packName}}/${{item.file}}`;
                         }});
-                        rawPlaylist = window.playlistData;
-                        activePlaylist = [...rawPlaylist];
-                        activeIndices = rawPlaylist.map((_, i) => i);
-                        initPlayer();
-                    }} else {{
-                        showError(`詞彙包 "${{packName}}" 內無有效單字資料。`);
                     }}
-                }};
-                document.head.appendChild(script);
-            }} else {{
-                const script = document.createElement('script');
-                script.src = 'playlist.js';
-                script.onerror = () => {{
-                    showError("找不到根目錄的 playlist.js。請確認已執行生成腳本！");
-                }};
-                script.onload = () => {{
-                    if (window.playlistData && window.playlistData.length > 0) {{
-                        rawPlaylist = window.playlistData;
-                        activePlaylist = [...rawPlaylist];
-                        activeIndices = rawPlaylist.map((_, i) => i);
+                    // 在記憶體中建立含 1-based index 之項目，完全不破壞原始 playlist.js 檔案
+                    rawPlaylist = window.playlistData.map((item, idx) => {{
+                        const id = idx + 1;
+                        return {{
+                            ...item,
+                            id: id,
+                            displayNum: id
+                        }};
+                    }});
+
+                    // 動態載入 skip.js (避開 CORS 限制，修改後按 F5 即生效)
+                    const skipScriptPath = packName 
+                        ? `${{encodeURIComponent(packName)}}/skip.js` 
+                        : 'skip.js';
+                    const skipScript = document.createElement('script');
+                    skipScript.src = skipScriptPath;
+
+                    const finishInit = () => {{
+                        // 解析 skip.js 原始跳過設定
+                        const defaultSkipSet = parseRangeStringToSet(window.skipConfig || "");
+                        rawPlaylist.forEach(item => {{
+                            item.defaultSkipped = defaultSkipSet.has(item.id);
+                        }});
+
+                        // 檢查 localStorage 是否有使用者先前的自訂跳過設定 (自動偵測當前目錄名稱作為獨立 Scope)
+                        const pathParts = decodeURI(window.location.pathname).split('/').filter(Boolean);
+                        const localFolder = pathParts.length >= 2 ? pathParts[pathParts.length - 2] : 'root';
+                        const currentScope = packName || (localFolder !== 'root' ? localFolder : 'root');
+                        const storageKey = 'custom_skip_' + currentScope;
+                        const savedCustomSkip = localStorage.getItem(storageKey);
+                        if (savedCustomSkip !== null && savedCustomSkip.trim() !== '') {{
+                            const customSet = parseRangeStringToSet(savedCustomSkip);
+                            rawPlaylist.forEach(item => {{
+                                item.skipped = customSet.has(item.id);
+                            }});
+                        }} else {{
+                            rawPlaylist.forEach(item => {{
+                                item.skipped = item.defaultSkipped;
+                            }});
+                        }}
+
+                        // 檢查目前是否有跳過項目
+                        const hasSkipped = rawPlaylist.some(item => item.skipped);
+                        isSkipMode = hasSkipped;
+                        updateSkipToggleUI();
+
+                        filterPlaylist();
                         initPlayer();
-                    }} else {{
-                        showError("根目錄 playlist.js 內無有效單字資料。");
-                    }}
-                }};
-                document.head.appendChild(script);
-            }}
+                    }};
+
+                    skipScript.onload = finishInit;
+                    skipScript.onerror = () => {{
+                        // 若目錄下無 skip.js，視為預設全無跳過
+                        window.skipConfig = "";
+                        finishInit();
+                    }};
+                    document.head.appendChild(skipScript);
+                }} else {{
+                    showError(packName ? `詞彙包 "${{packName}}" 內無有效單字資料。` : "根目錄 playlist.js 內無有效單字資料。");
+                }}
+            }};
+            document.head.appendChild(script);
         }}
 
         function showError(msg) {{
             displayWord.innerText = "⚠️ 載入錯誤";
             displayMeaning.innerText = msg;
             displayMeaning.style.color = "#ef4444";
+        }}
+
+        // 強化模式切換開關
+        function toggleSkipMode() {{
+            const skippedTotal = rawPlaylist.filter(it => it.skipped).length;
+            if (skippedTotal === 0 && !isSkipMode) {{
+                // 若目前跳過數為 0，引導使用者進行自訂
+                openSkipEditor();
+                return;
+            }}
+            isSkipMode = !isSkipMode;
+            updateSkipToggleUI();
+            filterPlaylist();
+
+            // 若切換後當前曲目不在新清單中，自動跳至新清單第一首有效單字
+            const activePos = activeIndices.indexOf(currentIndex);
+            if (activePos === -1 && activePlaylist.length > 0) {{
+                loadTrack(activeIndices[0]);
+            }} else {{
+                highlightActiveTrack();
+            }}
+        }}
+
+        function updateSkipToggleUI() {{
+            if (!skipToggleBtn || !skipToggleText) return;
+            const skippedTotal = rawPlaylist.filter(it => it.skipped).length;
+            if (isSkipMode && skippedTotal > 0) {{
+                skipToggleBtn.classList.remove('is-all-mode');
+                skipToggleText.innerHTML = `🎯 強化模式 (已跳過 ${{skippedTotal}} 字)`;
+                skipToggleBtn.title = "點擊切換為全部單字模式 (包含已熟單字)";
+            }} else {{
+                skipToggleBtn.classList.add('is-all-mode');
+                skipToggleText.innerHTML = skippedTotal > 0 
+                    ? `📖 全部單字 (共 ${{rawPlaylist.length}} 字)` 
+                    : `🎯 強化模式 (0 字)`;
+                skipToggleBtn.title = skippedTotal > 0 
+                    ? "點擊切換為強化模式 (自動跳過已熟單字)" 
+                    : "點擊設定欲跳過的單字編號";
+            }}
+        }}
+
+        // 開啟自訂跳過編號編輯器 (支援在網頁上即時生效與持久保存)
+        function openSkipEditor() {{
+            const currentSkippedIds = rawPlaylist.filter(it => it.skipped).map(it => it.id);
+            const defaultStr = formatNumberRanges(currentSkippedIds);
+            
+            const pathParts = decodeURI(window.location.pathname).split('/').filter(Boolean);
+            const localFolder = pathParts.length >= 2 ? pathParts[pathParts.length - 2] : 'root';
+            const currentScope = packName || (localFolder !== 'root' ? localFolder : 'root');
+            const storageKey = 'custom_skip_' + currentScope;
+
+            const inputStr = prompt(
+                "【即時自訂跳過單字編號】\\n" +
+                "請輸入您已熟悉、想要跳過的單字編號 (支援如 1-10, 15, 18, 22)：\\n" +
+                "💡 提示：在此修改後會立即生效並自動記住，無需重新跑 Python！\\n" +
+                "💡 若輸入「reset」或留空送出，將重置還原為 skip.js 檔案原始設定。",
+                defaultStr
+            );
+            if (inputStr === null) return; // 使用者按取消
+
+            const trimmed = inputStr.trim();
+            if (trimmed.toLowerCase() === 'reset' || trimmed === '') {{
+                localStorage.removeItem(storageKey);
+                rawPlaylist.forEach(item => {{
+                    item.skipped = !!item.defaultSkipped;
+                }});
+            }} else {{
+                const newSkipSet = parseRangeStringToSet(trimmed);
+                rawPlaylist.forEach(item => {{
+                    item.skipped = newSkipSet.has(item.id);
+                }});
+                localStorage.setItem(storageKey, trimmed);
+            }}
+
+            const newSkippedTotal = rawPlaylist.filter(it => it.skipped).length;
+            isSkipMode = newSkippedTotal > 0;
+            updateSkipToggleUI();
+            filterPlaylist();
+
+            // 若當前播音項目被排除，自動切換至新清單第一首
+            const activePos = activeIndices.indexOf(currentIndex);
+            if (activePos === -1 && activePlaylist.length > 0) {{
+                loadTrack(activeIndices[0]);
+            }} else {{
+                highlightActiveTrack();
+            }}
+        }}
+
+        // 將數字陣列格式化為連續區間字串 (例如 [1,2,3,5,6] -> "1-3, 5-6")
+        function formatNumberRanges(numbers) {{
+            if (!numbers || numbers.length === 0) return "";
+            const sorted = [...new Set(numbers)].sort((a, b) => a - b);
+            const ranges = [];
+            let start = sorted[0];
+            let end = sorted[0];
+
+            for (let i = 1; i < sorted.length; i++) {{
+                if (sorted[i] === end + 1) {{
+                    end = sorted[i];
+                }} else {{
+                    ranges.push(start === end ? `${{start}}` : `${{start}}-${{end}}`);
+                    start = sorted[i];
+                    end = sorted[i];
+                }}
+            }}
+            ranges.push(start === end ? `${{start}}` : `${{start}}-${{end}}`);
+            return ranges.join(', ');
+        }}
+
+        // 將使用者輸入字串或陣列解析為 Set<number>
+        function parseRangeStringToSet(input) {{
+            const resultSet = new Set();
+            if (!input) return resultSet;
+            let str = input;
+            if (Array.isArray(input)) {{
+                str = input.join(' ');
+            }} else if (typeof input === 'number') {{
+                str = String(input);
+            }} else if (typeof input !== 'string') {{
+                return resultSet;
+            }}
+            const clean = str.replace(/[,;]/g, ' ');
+            const tokens = clean.split(/\\s+/);
+            for (const tok of tokens) {{
+                const trimmed = tok.trim();
+                if (!trimmed) continue;
+                const rangeMatch = trimmed.match(/^(\\d+)\\s*[-~]\\s*(\\d+)$/);
+                if (rangeMatch) {{
+                    let s = parseInt(rangeMatch[1], 10);
+                    let e = parseInt(rangeMatch[2], 10);
+                    if (s > e) [s, e] = [e, s];
+                    for (let n = s; n <= e; n++) {{
+                        if (n >= 1) resultSet.add(n);
+                    }}
+                    continue;
+                }}
+                const singleMatch = trimmed.match(/^(\\d+)/);
+                if (singleMatch) {{
+                    const n = parseInt(singleMatch[1], 10);
+                    if (n >= 1) resultSet.add(n);
+                }}
+            }}
+            return resultSet;
         }}
 
         // 初始化播放清單 UI
@@ -883,24 +1143,24 @@ def generate_player():
                 playlistUi.innerHTML = `
                     <div class="empty-search">
                         <i class="fa-solid fa-folder-open"></i>
-                        沒有找到任何符合的單字
+                        ${{isSkipMode ? '目前模式下所有單字皆已被設定為跳過' : '沒有找到任何符合的單字'}}
                     </div>
                 `;
                 return;
             }}
 
-            activePlaylist.forEach((item, index) => {{
-                // 取得其在原始陣列中的索引
-                const originalIndex = activeIndices[index];
+            activePlaylist.forEach((item, activeIdx) => {{
+                const originalIndex = activeIndices[activeIdx];
+                const displayId = item.id || (originalIndex + 1);
                 const li = document.createElement('li');
                 li.id = 'track-' + originalIndex;
                 li.onclick = () => loadTrack(originalIndex);
                 
                 li.innerHTML = `
-                    <span class="track-num">${{originalIndex + 1}}</span>
+                    <span class="track-num">${{displayId}}</span>
                     <div class="track-content">
-                        <span class="track-word">${{item.word}}</span>
-                        <span class="track-meaning">${{item.meaning}}</span>
+                        <span class="track-word">${{escapeHtml(item.word)}}</span>
+                        <span class="track-meaning">${{escapeHtml(item.meaning)}}</span>
                     </div>
                 `;
                 playlistUi.appendChild(li);
@@ -910,25 +1170,32 @@ def generate_player():
             highlightActiveTrack();
         }}
 
-        // 搜尋篩選過濾邏輯
+        // 搜尋篩選與跳過過濾邏輯
         function filterPlaylist() {{
             const query = searchInput.value.toLowerCase().trim();
             
-            if (!query) {{
-                activePlaylist = [...rawPlaylist];
-                activeIndices = rawPlaylist.map((_, i) => i);
-            }} else {{
-                activePlaylist = [];
-                activeIndices = [];
-                rawPlaylist.forEach((item, index) => {{
-                    const wordMatch = item.word.toLowerCase().includes(query);
-                    const meaningMatch = item.meaning.toLowerCase().includes(query);
-                    if (wordMatch || meaningMatch) {{
-                        activePlaylist.push(item);
-                        activeIndices.push(index);
+            activePlaylist = [];
+            activeIndices = [];
+
+            rawPlaylist.forEach((item, index) => {{
+                // 若啟用跳過模式且單字已被標記為跳過，則排除
+                if (isSkipMode && item.skipped) {{
+                    return;
+                }}
+
+                // 搜尋文字比對
+                if (query) {{
+                    const wordMatch = item.word && item.word.toLowerCase().includes(query);
+                    const meaningMatch = item.meaning && item.meaning.toLowerCase().includes(query);
+                    if (!wordMatch && !meaningMatch) {{
+                        return;
                     }}
-                }});
-            }}
+                }}
+
+                activePlaylist.push(item);
+                activeIndices.push(index);
+            }});
+
             initPlaylist();
         }}
         
@@ -1060,14 +1327,28 @@ def generate_player():
             playPauseBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> 休息 (${{(currentLeft / 1000).toFixed(1)}}s)`;
         }}
 
-        // 精準跳转至指定單字編號
+        // 精準跳轉至指定單字編號 (支援原始序號與跳過模式提示)
         function jumpToTrack() {{
             const val = parseInt(jumpInput.value);
             if (!val || val < 1 || val > rawPlaylist.length) {{
                 alert("請輸入 1 到 " + rawPlaylist.length + " 之間的正確單字編號");
                 return;
             }}
-            loadTrack(val - 1);
+            const targetRawIndex = val - 1;
+            const activePos = activeIndices.indexOf(targetRawIndex);
+
+            if (activePos !== -1) {{
+                loadTrack(targetRawIndex);
+            }} else {{
+                if (isSkipMode && rawPlaylist[targetRawIndex] && rawPlaylist[targetRawIndex].skipped) {{
+                    if (confirm(`單字 #${{val}} (${{rawPlaylist[targetRawIndex].word}}) 目前處於跳過清單中。是否切換至全部單字模式並播放？`)) {{
+                        toggleSkipMode();
+                        loadTrack(targetRawIndex);
+                    }}
+                }} else {{
+                    loadTrack(targetRawIndex);
+                }}
+            }}
             jumpInput.value = '';
         }}
 
@@ -1075,30 +1356,42 @@ def generate_player():
             if (e.key === "Enter") jumpToTrack();
         }});
 
-        // 播放下一首
+        // 播放下一首 (嚴格在 activePlaylist 專注序列中前進)
         function playNext(force = false) {{
             if (force) clearGapState();
+            if (activePlaylist.length === 0) return;
 
-            if (currentIndex < rawPlaylist.length - 1) {{
-                loadTrack(currentIndex + 1);
+            const currentActivePos = activeIndices.indexOf(currentIndex);
+            if (currentActivePos >= 0 && currentActivePos < activePlaylist.length - 1) {{
+                loadTrack(activeIndices[currentActivePos + 1]);
+            }} else if (currentActivePos === -1 && activePlaylist.length > 0) {{
+                loadTrack(activeIndices[0]);
             }} else {{
+                // 專注清單播放完畢
                 clearGapState();
                 displayWord.innerText = "🎉 恭喜完成！";
-                displayMeaning.innerText = "所有單字皆已播放完畢";
+                displayMeaning.innerText = isSkipMode 
+                    ? `強化模式專注單字已全數播放完畢 (共 ${{activePlaylist.length}} 字)`
+                    : "所有單字皆已播放完畢";
                 displaySentence.innerText = "";
                 displaySentenceTrans.innerText = "";
                 playPauseBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> 重頭播放';
                 playPauseBtn.onclick = () => {{
                     playPauseBtn.onclick = togglePlay;
-                    loadTrack(0);
+                    loadTrack(activeIndices[0]);
                 }};
             }}
         }}
         
-        // 播放上一首
+        // 播放上一首 (嚴格在 activePlaylist 專注序列中後退)
         function playPrev() {{
-            if (currentIndex > 0) {{
-                loadTrack(currentIndex - 1);
+            if (activePlaylist.length === 0) return;
+
+            const currentActivePos = activeIndices.indexOf(currentIndex);
+            if (currentActivePos > 0) {{
+                loadTrack(activeIndices[currentActivePos - 1]);
+            }} else if (currentActivePos === -1 && activePlaylist.length > 0) {{
+                loadTrack(activeIndices[0]);
             }}
         }}
 
@@ -1121,7 +1414,6 @@ def generate_player():
 
         // 全域鍵盤快捷鍵綁定
         document.addEventListener('keydown', (e) => {{
-            // 若游標位於輸入框內則不觸發快捷鍵，避免打字干擾
             if (document.activeElement.tagName === "INPUT") return;
 
             if (e.code === "Space") {{
@@ -1134,11 +1426,21 @@ def generate_player():
             }}
         }});
 
-        // 載入指定曲目（預設第 1 首，若網址指定 ?index=N 則自動跳轉，但不自動播放以符合瀏覽器規範）
+        // 字元跳脫防 XSS 安全機制
+        function escapeHtml(str) {{
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }}
+
+        // 載入指定曲目（預設第一首有效曲目，若網址指定 ?index=N 則自動跳轉）
         function initPlayer() {{
-            initPlaylist();
             if (rawPlaylist.length > 0) {{
-                let targetIndex = 0;
+                let targetIndex = activePlaylist.length > 0 ? activeIndices[0] : 0;
                 if (startIndexParam) {{
                     const parsed = parseInt(startIndexParam, 10);
                     if (!isNaN(parsed) && parsed >= 1 && parsed <= rawPlaylist.length) {{
@@ -1147,12 +1449,14 @@ def generate_player():
                 }}
                 currentIndex = targetIndex;
                 const targetItem = rawPlaylist[currentIndex];
-                audio.src = targetItem.file;
-                displayWord.innerText = targetItem.word;
-                displayMeaning.innerText = targetItem.meaning;
-                displaySentence.innerText = targetItem.sentence || "";
-                displaySentenceTrans.innerText = targetItem.sentence_trans || "";
-                highlightActiveTrack();
+                if (targetItem) {{
+                    audio.src = targetItem.file;
+                    displayWord.innerText = targetItem.word;
+                    displayMeaning.innerText = targetItem.meaning;
+                    displaySentence.innerText = targetItem.sentence || "";
+                    displaySentenceTrans.innerText = targetItem.sentence_trans || "";
+                    highlightActiveTrack();
+                }}
             }}
         }}
 
@@ -1163,11 +1467,11 @@ def generate_player():
 </html>
 """
 
-    with open(HTML_FILE, "w", encoding="utf-8") as html_f:
+    with open(html_file, "w", encoding="utf-8") as html_f:
         html_f.write(html_content)
-    print(f"✅ 網頁引擎生成完成！已產出: {HTML_FILE}")
+    print(f"✅ 網頁引擎生成完成！已產出: {html_file}")
 
-    # 3. 寫入高質感純閱讀清單 mp3.html 檔案 (支援 playlist.js 解耦與音檔試聽)
+    # 4. 寫入高質感純閱讀清單 mp3.html 檔案 (支援 playlist.js 解耦與音檔試聽)
     html_read_content = r"""<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
@@ -1680,6 +1984,9 @@ def generate_player():
                 </div>
             </div>
             <div class="header-actions">
+                <button type="button" class="nav-btn" id="read-skip-toggle" style="display: none;" onclick="toggleReadSkipMode()" title="點擊切換是否跳過已熟悉單字">
+                    <i class="fa-solid fa-bullseye"></i> <span id="read-skip-text">🎯 強化模式</span>
+                </button>
                 <div class="search-wrapper">
                     <i class="fa-solid fa-magnifying-glass search-icon"></i>
                     <input type="text" id="search-input" placeholder="搜尋短語、中文或例句 (按 / 聚焦)..." autocomplete="off">
@@ -1726,6 +2033,7 @@ def generate_player():
         let currentFilteredData = [];    // 當前搜尋篩選後的資料
         let renderedCount = 0;           // 目前已掛載到 DOM 的筆數
         const CHUNK_SIZE = 60;           // 每批次增量渲染筆數 (首屏秒開)
+        let isReadSkipMode = true;       // 是否啟用跳過模式 (若有跳過項目則預設開啟)
         
         // 單一全域 Audio 實例 (避免重複建立音訊物件浪費記憶體)
         const sharedAudio = new Audio();
@@ -1764,17 +2072,18 @@ def generate_player():
             // 建立滾動偵測器 (IntersectionObserver)
             setupIntersectionObserver();
 
-            // 動態載入 playlist.js
+            // 動態載入 playlist.js 與 skip.js
             const script = document.createElement('script');
             script.src = packName ? `${encodeURIComponent(packName)}/playlist.js` : 'playlist.js';
+            const skipScriptPath = packName ? `${encodeURIComponent(packName)}/skip.js` : 'skip.js';
             
             script.onload = () => {
                 if (window.playlistData && window.playlistData.length > 0) {
                     // 資料預先處理：預建搜尋索引、解析序號與連結，避免在渲染與過濾時重複運算
                     fullPlaylistData = window.playlistData.map((item, index) => {
-                        let displayNum = index + 1;
-                        const fileMatch = item.file ? item.file.match(/(?:_|^)(\\d{4})_/) : null;
-                        if (fileMatch) {
+                        let displayNum = item.id || (index + 1);
+                        const fileMatch = item.file ? item.file.match(/(?:_|^)(\d{4})_/) : null;
+                        if (!item.id && fileMatch) {
                             displayNum = parseInt(fileMatch[1], 10);
                         }
 
@@ -1789,6 +2098,7 @@ def generate_player():
 
                         return {
                             ...item,
+                            id: displayNum,
                             index,
                             displayNum,
                             fullAudioPath,
@@ -1797,8 +2107,48 @@ def generate_player():
                         };
                     });
 
-                    currentFilteredData = fullPlaylistData;
-                    renderInitial(currentFilteredData);
+                    // 動態加載 skip.js (避開 CORS 限制，修改後按 F5 即生效)
+                    const skipScript = document.createElement('script');
+                    skipScript.src = skipScriptPath;
+
+                    const finishInit = () => {
+                        const defaultSkipSet = parseRangeStringToSet(window.skipConfig || "");
+                        const pathParts = decodeURI(window.location.pathname).split('/').filter(Boolean);
+                        const localFolder = pathParts.length >= 2 ? pathParts[pathParts.length - 2] : 'root';
+                        const currentScope = packName || (localFolder !== 'root' ? localFolder : 'root');
+                        const storageKey = 'custom_skip_' + currentScope;
+                        const savedCustomSkip = localStorage.getItem(storageKey);
+
+                        let activeSkipSet = defaultSkipSet;
+                        if (savedCustomSkip !== null && savedCustomSkip.trim() !== '') {
+                            activeSkipSet = parseRangeStringToSet(savedCustomSkip);
+                        }
+
+                        fullPlaylistData.forEach(item => {
+                            item.skipped = activeSkipSet.has(item.displayNum);
+                        });
+
+                        // 檢查是否有跳過項目
+                        const hasSkipped = fullPlaylistData.some(item => item.skipped);
+                        const readSkipBtn = document.getElementById('read-skip-toggle');
+                        if (hasSkipped && readSkipBtn) {
+                            readSkipBtn.style.display = 'inline-flex';
+                            isReadSkipMode = true;
+                            updateReadSkipUI();
+                        } else if (readSkipBtn) {
+                            readSkipBtn.style.display = 'none';
+                            isReadSkipMode = false;
+                        }
+
+                        performSearch('');
+                    };
+
+                    skipScript.onload = finishInit;
+                    skipScript.onerror = () => {
+                        window.skipConfig = "";
+                        finishInit();
+                    };
+                    document.head.appendChild(skipScript);
                 } else {
                     showError("清單內無有效單字資料。");
                 }
@@ -1912,7 +2262,7 @@ def generate_player():
                 tr.id = `row-${item.index}`;
 
                 tr.innerHTML = `
-                    <td class="col-no">${item.displayNum}</td>
+                    <td class="col-no">${item.displayNum}${item.skipped ? '<span style="display:inline-block; font-size: 0.65rem; color: #a5b4fc; background: rgba(99, 102, 241, 0.2); padding: 1px 4px; border-radius: 4px; margin-left: 4px; font-weight: normal; vertical-align: middle;" title="此單字處於跳過清單">已熟</span>' : ''}</td>
                     <td class="col-word">
                         <div class="word-cell">
                             <button type="button" class="audio-play-btn" title="試聽發音" data-index="${item.index}" data-audio="${escapeHtml(item.fullAudioPath)}">
@@ -2063,14 +2413,42 @@ def generate_player():
             });
         }
 
-        function performSearch(query) {
-            if (!query) {
-                currentFilteredData = fullPlaylistData;
+        function toggleReadSkipMode() {
+            isReadSkipMode = !isReadSkipMode;
+            updateReadSkipUI();
+            const query = document.getElementById('search-input').value.trim().toLowerCase();
+            performSearch(query);
+        }
+
+        function updateReadSkipUI() {
+            const btn = document.getElementById('read-skip-toggle');
+            const text = document.getElementById('read-skip-text');
+            if (!btn || !text) return;
+            const skippedCount = fullPlaylistData.filter(it => it.skipped).length;
+            if (isReadSkipMode) {
+                text.innerHTML = `🎯 強化模式 (已跳過 ${skippedCount} 字)`;
+                btn.style.borderColor = 'rgba(99, 102, 241, 0.45)';
+                btn.style.color = '#a5b4fc';
+                btn.title = "點擊顯示全部單字 (包含已熟單字)";
             } else {
-                currentFilteredData = fullPlaylistData.filter(item => {
-                    return item._searchIndex && item._searchIndex.includes(query);
-                });
+                text.innerHTML = `📖 全部單字 (共 ${fullPlaylistData.length} 字)`;
+                btn.style.borderColor = 'var(--border-color)';
+                btn.style.color = 'var(--text-dim)';
+                btn.title = "點擊切換為強化模式 (自動隱藏已熟單字)";
             }
+        }
+
+        function performSearch(query) {
+            currentFilteredData = fullPlaylistData.filter(item => {
+                // 若處於強化跳過模式且單字已被標記為跳過，則排除
+                if (isReadSkipMode && item.skipped) {
+                    return false;
+                }
+                if (query) {
+                    return item._searchIndex && item._searchIndex.includes(query);
+                }
+                return true;
+            });
             renderInitial(currentFilteredData);
         }
 
@@ -2085,6 +2463,42 @@ def generate_player():
                 .replace(/'/g, "&#039;");
         }
 
+        // 10. 解析字串或陣列為 Set<number>
+        function parseRangeStringToSet(input) {
+            const resultSet = new Set();
+            if (!input) return resultSet;
+            let str = input;
+            if (Array.isArray(input)) {
+                str = input.join(' ');
+            } else if (typeof input === 'number') {
+                str = String(input);
+            } else if (typeof input !== 'string') {
+                return resultSet;
+            }
+            const clean = str.replace(/[,;]/g, ' ');
+            const tokens = clean.split(/\\s+/);
+            for (const tok of tokens) {
+                const trimmed = tok.trim();
+                if (!trimmed) continue;
+                const rangeMatch = trimmed.match(/^(\\d+)\\s*[-~]\\s*(\\d+)$/);
+                if (rangeMatch) {
+                    let s = parseInt(rangeMatch[1], 10);
+                    let e = parseInt(rangeMatch[2], 10);
+                    if (s > e) [s, e] = [e, s];
+                    for (let n = s; n <= e; n++) {
+                        if (n >= 1) resultSet.add(n);
+                    }
+                    continue;
+                }
+                const singleMatch = trimmed.match(/^(\\d+)/);
+                if (singleMatch) {
+                    const n = parseInt(singleMatch[1], 10);
+                    if (n >= 1) resultSet.add(n);
+                }
+            }
+            return resultSet;
+        }
+
         // 啟動初始化
         init();
     </script>
@@ -2092,11 +2506,20 @@ def generate_player():
 </html>
 """
 
-    with open(READ_HTML_FILE, "w", encoding="utf-8") as read_f:
+    with open(read_html_file, "w", encoding="utf-8") as read_f:
         read_f.write(html_read_content)
-    print(f"✅ 閱讀清單網頁生成完成！已產出: {READ_HTML_FILE}")
-    print("🚀 引擎與資料解耦重構完成！雙擊 player.html 即可在本地端執行。")
+    print(f"✅ 閱讀清單網頁生成完成！已產出: {read_html_file}")
+    print(f"🚀 目錄 [{os.path.abspath(base_dir)}] 處理完成！\n")
 
 if __name__ == "__main__":
-    generate_player()
+    # 若有傳入命令行參數，逐一處理指定之目錄
+    if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+        for arg in sys.argv[1:]:
+            if os.path.isdir(arg):
+                generate_player(arg)
+    else:
+        # 僅處理當前工作目錄，絕不隨意掃描覆寫其他子目錄
+        generate_player()
+
+    print("🎉 播放器與資料已全數生成完成！雙擊 player.html 即可在本地端執行。")
 
