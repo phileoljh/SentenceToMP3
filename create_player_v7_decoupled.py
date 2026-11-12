@@ -911,7 +911,7 @@ def generate_player(target_dir=None):
             <!-- 搜尋過濾器 -->
             <div class="search-container">
                 <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                <input type="text" id="searchInput" placeholder="搜尋單字、中文、例句或編號 (按 / 聚焦)..." autocomplete="off" oninput="handleSearchInput()">
+                <input type="text" id="searchInput" placeholder="搜尋英文單字、中文釋義或編號 (按 / 聚焦)..." autocomplete="off" oninput="handleSearchInput()">
                 <i class="fa-solid fa-xmark clear-search-icon" id="clearSearchBtn" onclick="clearSearch()" title="清除搜尋 (Esc)"></i>
             </div>
         </div>
@@ -1231,7 +1231,7 @@ def generate_player(target_dir=None):
                     playlistUi.innerHTML = `
                         <div class="empty-search">
                             <i class="fa-solid fa-magnifying-glass"></i>
-                            <div>沒有找到符合「<strong>${{escapeHtml(query)}}</strong>」的單字、釋義或例句</div>
+                            <div>沒有找到符合「<strong>${{escapeHtml(query)}}</strong>」的單字或釋義</div>
                             <button type="button" class="clear-search-btn-text" onclick="clearSearch()"><i class="fa-solid fa-xmark"></i> 清除搜尋條件</button>
                         </div>
                     `;
@@ -1282,7 +1282,7 @@ def generate_player(target_dir=None):
             activePlaylist = [];
             activeIndices = [];
 
-            // 支援以純數字或 #編號 進行序號比對 (如 "5", "#5", "0005")
+            // 支援以純數字或 #編號 進行精確序號比對 (如 "5", "#5")
             const numMatch = query ? query.match(/^#?(\d+)$/) : null;
             const targetId = numMatch ? parseInt(numMatch[1], 10) : null;
 
@@ -1290,14 +1290,12 @@ def generate_player(target_dir=None):
                 const displayId = item.id || (index + 1);
 
                 if (query) {{
-                    // 【核心修復】：主動搜尋時擴展至全部單字 (包含已標記跳過者)，杜絕字詞被吞噬
+                    // 【核心修復】：主動搜尋時比對單字、釋義與序號，嚴格排除例句隱性干擾
                     const wordMatch = item.word && item.word.toLowerCase().includes(query);
                     const meaningMatch = item.meaning && item.meaning.toLowerCase().includes(query);
-                    const sentenceMatch = item.sentence && item.sentence.toLowerCase().includes(query);
-                    const sentenceTransMatch = item.sentence_trans && item.sentence_trans.toLowerCase().includes(query);
-                    const idMatch = targetId !== null && (displayId === targetId || String(displayId).startsWith(query));
+                    const idMatch = targetId !== null && displayId === targetId;
 
-                    if (!wordMatch && !meaningMatch && !sentenceMatch && !sentenceTransMatch && !idMatch) {{
+                    if (!wordMatch && !meaningMatch && !idMatch) {{
                         return;
                     }}
                 }} else {{
