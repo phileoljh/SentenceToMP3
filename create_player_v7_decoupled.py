@@ -480,13 +480,14 @@ def generate_player(target_dir=None):
             position: relative;
         }}
 
-        .search-container i {{
+        .search-container .search-icon {{
             position: absolute;
             left: 12px;
             top: 50%;
             transform: translateY(-50%);
             color: var(--text-dim);
             font-size: 0.9rem;
+            pointer-events: none;
         }}
 
         #searchInput {{
@@ -494,7 +495,7 @@ def generate_player(target_dir=None):
             background: rgba(15, 23, 42, 0.5);
             border: 1px solid var(--border-color);
             color: #fff;
-            padding: 10px 12px 10px 36px;
+            padding: 10px 38px 10px 36px;
             border-radius: 12px;
             font-size: 0.9rem;
             outline: none;
@@ -505,6 +506,24 @@ def generate_player(target_dir=None):
             border-color: var(--primary-color);
             box-shadow: 0 0 10px var(--primary-glow);
             background: rgba(15, 23, 42, 0.7);
+        }}
+
+        .clear-search-icon {{
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-dim);
+            font-size: 0.9rem;
+            cursor: pointer;
+            display: none;
+            padding: 4px;
+            transition: var(--transition);
+        }}
+
+        .clear-search-icon:hover {{
+            color: #fff;
+            transform: translateY(-50%) scale(1.15);
         }}
 
         /* 下方播放清單容器 */
@@ -588,6 +607,20 @@ def generate_player(target_dir=None):
             color: var(--primary-color);
         }}
 
+        /* 搜尋結果中標記已熟單字徽章 */
+        .track-skipped-badge {{
+            display: inline-block;
+            font-size: 0.68rem;
+            color: #a5b4fc;
+            background: rgba(99, 102, 241, 0.2);
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            padding: 1px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+            font-weight: 500;
+            vertical-align: middle;
+        }}
+
         /* 休息中倒數狀態效果 */
         .resting-state #current-info {{
             border-color: var(--accent-success);
@@ -611,6 +644,28 @@ def generate_player(target_dir=None):
             margin-bottom: 12px;
             color: rgba(255,255,255,0.15);
             display: block;
+        }}
+
+        /* 空狀態清除搜尋條件按鈕 */
+        .clear-search-btn-text {{
+            margin-top: 14px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            font-size: 0.85rem;
+            background: rgba(99, 102, 241, 0.15);
+            border: 1px solid rgba(99, 102, 241, 0.35);
+            color: #a5b4fc;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+        }}
+
+        .clear-search-btn-text:hover {{
+            background: rgba(99, 102, 241, 0.3);
+            color: #fff;
+            border-color: var(--primary-color);
         }}
 
         @media (max-width: 580px) {{
@@ -759,11 +814,15 @@ def generate_player(target_dir=None):
                 margin: 10px 0 0 0;
             }}
             #searchInput {{
-                padding: 8px 10px 8px 32px;
+                padding: 8px 30px 8px 32px;
                 font-size: 0.85rem;
             }}
-            .search-container i {{
+            .search-container .search-icon {{
                 left: 10px;
+                font-size: 0.8rem;
+            }}
+            .clear-search-icon {{
+                right: 10px;
                 font-size: 0.8rem;
             }}
             .playlist-container {{
@@ -851,8 +910,9 @@ def generate_player(target_dir=None):
 
             <!-- 搜尋過濾器 -->
             <div class="search-container">
-                <i class="fa-solid fa-magnifying-glass"></i>
-                <input type="text" id="searchInput" placeholder="在清單中搜尋英文單字或中文釋義..." oninput="filterPlaylist()">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="searchInput" placeholder="搜尋單字、中文、例句或編號 (按 / 聚焦)..." autocomplete="off" oninput="handleSearchInput()">
+                <i class="fa-solid fa-xmark clear-search-icon" id="clearSearchBtn" onclick="clearSearch()" title="清除搜尋 (Esc)"></i>
             </div>
         </div>
 
@@ -889,6 +949,8 @@ def generate_player(target_dir=None):
         const playPauseBtn = document.getElementById('playPauseBtn');
         const jumpInput = document.getElementById('jumpInput');
         const searchInput = document.getElementById('searchInput');
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+        let searchDebounceTimer = null;
         const skipToggleBtn = document.getElementById('skipToggleBtn');
         const skipToggleText = document.getElementById('skipToggleText');
 
@@ -1131,21 +1193,56 @@ def generate_player(target_dir=None):
             return resultSet;
         }}
 
-        // 初始化播放清單 UI
-        function initPlaylist() {{
+        // 搜尋輸入監聽 (含 100ms 防抖處理)
+        function handleSearchInput() {{
+            if (clearSearchBtn) {{
+                clearSearchBtn.style.display = searchInput.value ? 'block' : 'none';
+            }}
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => {{
+                filterPlaylist();
+            }}, 100);
+        }}
+
+        // 清除搜尋條件並重新聚焦搜尋框
+        function clearSearch() {{
+            searchInput.value = '';
+            if (clearSearchBtn) {{
+                clearSearchBtn.style.display = 'none';
+            }}
+            clearTimeout(searchDebounceTimer);
+            filterPlaylist();
+            searchInput.focus();
+        }}
+
+        // 初始化播放清單 UI (支援以 shouldScroll 決定是否觸發自動滾動)
+        function initPlaylist(shouldScroll = false) {{
             playlistUi.innerHTML = '';
             
             // 防呆設定跳轉範圍
             jumpInput.max = rawPlaylist.length;
             jumpInput.placeholder = `1-${{rawPlaylist.length}}`;
 
+            const query = searchInput.value.trim();
+
             if (activePlaylist.length === 0) {{
-                playlistUi.innerHTML = `
-                    <div class="empty-search">
-                        <i class="fa-solid fa-folder-open"></i>
-                        ${{isSkipMode ? '目前模式下所有單字皆已被設定為跳過' : '沒有找到任何符合的單字'}}
-                    </div>
-                `;
+                // 【核心修復】：精準區分「搜尋無結果」與「全被跳過」的空狀態，徹底解決誤導訊息
+                if (query) {{
+                    playlistUi.innerHTML = `
+                        <div class="empty-search">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <div>沒有找到符合「<strong>${{escapeHtml(query)}}</strong>」的單字、釋義或例句</div>
+                            <button type="button" class="clear-search-btn-text" onclick="clearSearch()"><i class="fa-solid fa-xmark"></i> 清除搜尋條件</button>
+                        </div>
+                    `;
+                }} else {{
+                    playlistUi.innerHTML = `
+                        <div class="empty-search">
+                            <i class="fa-solid fa-folder-open"></i>
+                            <div>${{isSkipMode ? '目前模式下所有單字皆已被設定為跳過' : '沒有找到任何符合的單字'}}</div>
+                        </div>
+                    `;
+                }}
                 return;
             }}
 
@@ -1155,9 +1252,14 @@ def generate_player(target_dir=None):
                 const li = document.createElement('li');
                 li.id = 'track-' + originalIndex;
                 li.onclick = () => loadTrack(originalIndex);
+
+                // 若該單字處於跳過名單且使用者正在進行關鍵字搜尋，醒目標示「已熟」徽章
+                const skipBadgeHtml = (query && item.skipped) 
+                    ? '<span class="track-skipped-badge" title="此單字處於已熟/跳過名單中">已熟</span>' 
+                    : '';
                 
                 li.innerHTML = `
-                    <span class="track-num">${{displayId}}</span>
+                    <span class="track-num">${{displayId}}${{skipBadgeHtml}}</span>
                     <div class="track-content">
                         <span class="track-word">${{escapeHtml(item.word)}}</span>
                         <span class="track-meaning">${{escapeHtml(item.meaning)}}</span>
@@ -1166,28 +1268,41 @@ def generate_player(target_dir=None):
                 playlistUi.appendChild(li);
             }});
             
-            // 重新為當前歌曲標記高亮樣式
-            highlightActiveTrack();
+            // 重新為當前歌曲標記高亮樣式 (若由搜尋引發則 shouldScroll 為 false，防止打字時畫面被強行捲動)
+            highlightActiveTrack(shouldScroll);
         }}
 
         // 搜尋篩選與跳過過濾邏輯
         function filterPlaylist() {{
             const query = searchInput.value.toLowerCase().trim();
+            if (clearSearchBtn) {{
+                clearSearchBtn.style.display = searchInput.value ? 'block' : 'none';
+            }}
             
             activePlaylist = [];
             activeIndices = [];
 
-            rawPlaylist.forEach((item, index) => {{
-                // 若啟用跳過模式且單字已被標記為跳過，則排除
-                if (isSkipMode && item.skipped) {{
-                    return;
-                }}
+            // 支援以純數字或 #編號 進行序號比對 (如 "5", "#5", "0005")
+            const numMatch = query ? query.match(/^#?(\d+)$/) : null;
+            const targetId = numMatch ? parseInt(numMatch[1], 10) : null;
 
-                // 搜尋文字比對
+            rawPlaylist.forEach((item, index) => {{
+                const displayId = item.id || (index + 1);
+
                 if (query) {{
+                    // 【核心修復】：主動搜尋時擴展至全部單字 (包含已標記跳過者)，杜絕字詞被吞噬
                     const wordMatch = item.word && item.word.toLowerCase().includes(query);
                     const meaningMatch = item.meaning && item.meaning.toLowerCase().includes(query);
-                    if (!wordMatch && !meaningMatch) {{
+                    const sentenceMatch = item.sentence && item.sentence.toLowerCase().includes(query);
+                    const sentenceTransMatch = item.sentence_trans && item.sentence_trans.toLowerCase().includes(query);
+                    const idMatch = targetId !== null && (displayId === targetId || String(displayId).startsWith(query));
+
+                    if (!wordMatch && !meaningMatch && !sentenceMatch && !sentenceTransMatch && !idMatch) {{
+                        return;
+                    }}
+                }} else {{
+                    // 無搜尋關鍵字時，依據強化模式 (isSkipMode) 決定是否過濾已熟單字
+                    if (isSkipMode && item.skipped) {{
                         return;
                     }}
                 }}
@@ -1196,29 +1311,32 @@ def generate_player(target_dir=None):
                 activeIndices.push(index);
             }});
 
-            initPlaylist();
+            // 搜尋過濾重建清單時，傳入 shouldScroll = false，防止使用者鍵入打字時視窗跳動
+            initPlaylist(false);
         }}
         
-        // 標記目前高亮曲目並自動平滑滾動
-        function highlightActiveTrack() {{
+        // 標記目前高亮曲目並依參數決定是否平滑滾動
+        function highlightActiveTrack(shouldScroll = true) {{
             document.querySelectorAll('.playlist li').forEach(el => el.classList.remove('active'));
             const activeItem = document.getElementById('track-' + currentIndex);
             
             if (activeItem) {{
                 activeItem.classList.add('active');
                 
-                // 平滑滾動讓當前音軌保持在固定 header 下方適當位置，避免被毛玻璃面板遮擋
-                const header = document.querySelector('.player-header');
-                const headerHeight = header ? header.offsetHeight : 380;
-                
-                const elementRect = activeItem.getBoundingClientRect();
-                const absoluteElementTop = elementRect.top + window.pageYOffset;
-                const targetScrollTop = absoluteElementTop - headerHeight - 20;
+                if (shouldScroll) {{
+                    // 平滑滾動讓當前音軌保持在固定 header 下方適當位置，避免被毛玻璃面板遮擋
+                    const header = document.querySelector('.player-header');
+                    const headerHeight = header ? header.offsetHeight : 380;
+                    
+                    const elementRect = activeItem.getBoundingClientRect();
+                    const absoluteElementTop = elementRect.top + window.pageYOffset;
+                    const targetScrollTop = absoluteElementTop - headerHeight - 20;
 
-                window.scrollTo({{
-                    top: targetScrollTop,
-                    behavior: 'smooth'
-                }});
+                    window.scrollTo({{
+                        top: targetScrollTop,
+                        behavior: 'smooth'
+                    }});
+                }}
             }}
         }}
         
@@ -1370,9 +1488,14 @@ def generate_player(target_dir=None):
                 // 專注清單播放完畢
                 clearGapState();
                 displayWord.innerText = "🎉 恭喜完成！";
-                displayMeaning.innerText = isSkipMode 
-                    ? `強化模式專注單字已全數播放完畢 (共 ${{activePlaylist.length}} 字)`
-                    : "所有單字皆已播放完畢";
+                const activeQuery = searchInput.value.trim();
+                if (activeQuery) {{
+                    displayMeaning.innerText = `搜尋結果清單已全數播放完畢 (共 ${{activePlaylist.length}} 字)`;
+                }} else {{
+                    displayMeaning.innerText = isSkipMode 
+                        ? `強化模式專注單字已全數播放完畢 (共 ${{activePlaylist.length}} 字)`
+                        : "所有單字皆已播放完畢";
+                }}
                 displaySentence.innerText = "";
                 displaySentenceTrans.innerText = "";
                 playPauseBtn.innerHTML = '<i class="fa-solid fa-rotate-left"></i> 重頭播放';
@@ -1412,9 +1535,23 @@ def generate_player(target_dir=None):
             }}
         }});
 
+        // 搜尋框快捷鍵 (Esc 快速清空並失焦)
+        searchInput.addEventListener('keydown', (e) => {{
+            if (e.key === "Escape") {{
+                clearSearch();
+                searchInput.blur();
+            }}
+        }});
+
         // 全域鍵盤快捷鍵綁定
         document.addEventListener('keydown', (e) => {{
             if (document.activeElement.tagName === "INPUT") return;
+
+            if (e.key === '/') {{
+                e.preventDefault();
+                searchInput.focus();
+                return;
+            }}
 
             if (e.code === "Space") {{
                 e.preventDefault();
